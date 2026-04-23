@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Docker Todo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:      #0d0f14;
+    --surface: #161922;
+    --border:  #2a2f3d;
+    --green:   #4ade80;
+    --cyan:    #22d3ee;
+    --muted:   #4b5563;
+    --text:    #e2e8f0;
+    --done:    #374151;
+    --red:     #f87171;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  header .label {
+    font-size: .7rem;
+    color: var(--green);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    margin-bottom: .5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  h1 span { color: var(--cyan); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 560px;
+    overflow: hidden;
+  }
+
+  /* Input area */
+  .input-row {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .prompt {
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    color: var(--green);
+    font-size: .9rem;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  #new-todo {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: .9rem;
+    padding: .9rem 0;
+  }
+  #new-todo::placeholder { color: var(--muted); }
+  .add-btn {
+    background: none;
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--green);
+    font-family: inherit;
+    font-size: .75rem;
+    font-weight: 600;
+    padding: 0 1.1rem;
+    cursor: pointer;
+    letter-spacing: .05em;
+    transition: background .15s;
+  }
+  .add-btn:hover { background: rgba(74,222,128,.08); }
+
+  /* Stats bar */
+  .stats {
+    display: flex;
+    gap: 1.5rem;
+    padding: .55rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .7rem;
+    color: var(--muted);
+  }
+  .stats span { color: var(--cyan); }
+
+  /* List */
+  #todo-list { list-style: none; }
+
+  .todo-item {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    padding: .75rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    animation: slideIn .18s ease;
+    transition: background .12s;
+  }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-item:hover { background: rgba(255,255,255,.02); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .check {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .15s, background .15s;
+    font-size: .7rem;
+    color: var(--bg);
+  }
+  .todo-item.done .check {
+    background: var(--green);
+    border-color: var(--green);
+  }
+
+  .todo-text {
+    flex: 1;
+    font-size: .875rem;
+    line-height: 1.4;
+    transition: color .15s;
+  }
+  .todo-item.done .todo-text {
+    color: var(--muted);
+    text-decoration: line-through;
+  }
+
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .85rem;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: color .15s, background .15s;
+    opacity: 0;
+  }
+  .todo-item:hover .del-btn { opacity: 1; }
+  .del-btn:hover { color: var(--red); background: rgba(248,113,113,.1); }
+
+  /* Empty state */
+  .empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: .8rem;
+  }
+  .empty .icon { font-size: 2rem; margin-bottom: .5rem; }
+
+  /* Footer */
+  footer {
+    margin-top: 1.2rem;
+    font-size: .65rem;
+    color: var(--muted);
+    letter-spacing: .05em;
+  }
+  footer span { color: var(--green); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="label">▶ Docker CI/CD Demo</div>
+  <h1>todo<span>.py</span></h1>
+</header>
+
+<div class="card">
+  <div class="input-row">
+    <div class="prompt">$&nbsp;</div>
+    <input id="new-todo" type="text" placeholder="add a task and press Enter..." autocomplete="off" />
+    <button class="add-btn" onclick="addTodo()">ADD</button>
+  </div>
+  <div class="stats">
+    total: <span id="stat-total">0</span> &nbsp;|&nbsp;
+    done: <span id="stat-done">0</span> &nbsp;|&nbsp;
+    left: <span id="stat-left">0</span>
+  </div>
+  <ul id="todo-list"></ul>
+</div>
+
+<footer>running inside <span>🐳 docker</span></footer>
+
+<script>
+  const list  = document.getElementById('todo-list');
+  const input = document.getElementById('new-todo');
+
+  async function load() {
+    const res  = await fetch('/api/todos');
+    const todos = await res.json();
+    render(todos);
+  }
+
+  function render(todos) {
+    list.innerHTML = '';
+    if (!todos.length) {
+      list.innerHTML = '<li class="empty"><div class="icon">📭</div>no tasks yet</li>';
+    } else {
+      todos.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'todo-item' + (t.done ? ' done' : '');
+        li.innerHTML = `
+          <div class="check" onclick="toggle(${t.id})">${t.done ? '✓' : ''}</div>
+          <span class="todo-text">${escHtml(t.text)}</span>
+          <button class="del-btn" onclick="del(${t.id})" title="delete">✕</button>
+        `;
+        list.appendChild(li);
+      });
+    }
+    const total = todos.length;
+    const done  = todos.filter(t => t.done).length;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-done').textContent  = done;
+    document.getElementById('stat-left').textContent  = total - done;
+  }
+
+  async function addTodo() {
+    const text = input.value.trim();
+    if (!text) return;
+    await fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    input.value = '';
+    load();
+  }
+
+  async function toggle(id) {
+    await fetch(`/api/todos/${id}/toggle`, { method: 'PATCH' });
+    load();
+  }
+
+  async function del(id) {
+    await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  input.addEventListener('keydown', e => e.key === 'Enter' && addTodo());
+
+  load();
+</script>
+</body>
+</html>

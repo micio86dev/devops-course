@@ -1,0 +1,66 @@
+# ── Git ───────────────────────────────────────────────────────────────────────
+# La storia git non serve nell'immagine (può pesare parecchio)
+.git/
+.gitignore
+.gitattributes
+
+# ── CI/CD ────────────────────────────────────────────────────────────────────
+.github/
+
+# ── Docker stessi ────────────────────────────────────────────────────────────
+# Evita loop e riduce il build context
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtualenv locali ─────────────────────────────────────────────────────────
+# Il venv lo costruisce il Dockerfile, non prenderlo dalla macchina host
+.venv/
+venv/
+env/
+
+# ── Database locali ───────────────────────────────────────────────────────────
+# I dati non devono mai finire nell'immagine
+*.db
+*.sqlite3
+*.sqlite
+/data/
+
+# ── Variabili d'ambiente ──────────────────────────────────────────────────────
+.env
+.env.*
+
+# ── Testing / linting ─────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.tox/
+.ruff_cache/
+.mypy_cache/
+
+# ── Editor e OS ───────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# ── Log ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Documentazione ────────────────────────────────────────────────────────────
+# Non serve a runtime, taglia qualche KB di build context
+README*
+*.md
+docs/
