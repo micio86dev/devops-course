@@ -1,0 +1,9 @@
+# unit + integration + api
+pytest
+pytest-cov
+pytest-flask
+
+# e2e
+pytest-playwright
+
+# After installing, run: playwright install chromium
