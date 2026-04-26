@@ -26,9 +26,10 @@ pytest is configured in `pytest.ini` to:
 ## Run by layer
 
 ```bash
-pytest tests/integration/   # DB helpers (7 tests)
-pytest tests/api/           # HTTP endpoints (21 tests)
-pytest tests/e2e/           # Playwright browser tests (34 tests)
+pytest tests/unit/          # Isolated helpers and routes (mocked DB, 24 tests)
+pytest tests/integration/   # DB helpers against real SQLite (7 tests)
+pytest tests/api/           # HTTP endpoints via Flask test client (21 tests)
+pytest tests/e2e/           # Playwright browser tests (31 tests)
 ```
 
 ## Run with verbose output
@@ -72,6 +73,9 @@ open htmlcov/index.html
 ```
 tests/
 ├── conftest.py              # shared fixtures: app (session), clean_db (autouse)
+├── unit/
+│   ├── test_db_helpers.py   # DB helpers — sqlite3/os mocked, no I/O
+│   └── test_routes.py       # Route handlers — get_db mocked, SQL verified
 ├── integration/
 │   └── test_db.py           # DB helpers — real SQLite, no HTTP
 ├── api/
@@ -92,11 +96,33 @@ The E2E live server runs in a background thread and uses the same file.
 
 | Layer | File | Uses | What it verifies |
 |---|---|---|---|
+| **Unit** | `tests/unit/` | mocked sqlite3/os/get_db | exact API calls, SQL strings, parameter binding |
 | **Integration** | `tests/integration/test_db.py` | real SQLite, no HTTP | `get_db`, `close_db`, `init_db` |
 | **API** | `tests/api/test_endpoints.py` | Flask test client + real SQLite | every HTTP endpoint, status codes, payloads |
 | **E2E** | `tests/e2e/test_todo_ui.py` | Playwright + real Flask server | full UI flows, XSS, persistence |
 
 ### Test classes
+
+#### Unit (`tests/unit/test_db_helpers.py`)
+
+| Class | What it covers |
+|---|---|
+| `TestGetDb` | `os.makedirs` call, `sqlite3.connect` args, `row_factory` assignment, connection caching |
+| `TestCloseDb` | `db.close()` called, graceful no-op without connection, error argument accepted |
+| `TestInitDb` | CREATE TABLE SQL, all column names present, `commit()` called |
+
+#### Unit (`tests/unit/test_routes.py`)
+
+Functions are called directly (no HTTP client); Flask contexts are opened manually.
+
+| Class | What it covers |
+|---|---|
+| `TestIndex` | `render_template` called with `"index.html"` |
+| `TestHealth` | return value is `200` with `{"status": "ok"}` |
+| `TestListTodos` | ORDER BY clause in SQL, serialized rows in response |
+| `TestCreateTodo` | stripped text in INSERT params, `commit()`, lastrowid used in SELECT |
+| `TestToggleTodo` | NOT done in UPDATE SQL, correct id in params, `commit()`, None row → 404 |
+| `TestDeleteTodo` | DELETE SQL with correct id, `commit()` |
 
 #### Integration (`tests/integration/test_db.py`)
 

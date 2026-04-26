@@ -29,13 +29,16 @@ docker-todo/
 │       └── index.html      ← Vanilla JS SPA frontend
 ├── tests/
 │   ├── conftest.py         ← Shared fixtures: app, clean_db (autouse)
+│   ├── unit/
+│   │   ├── test_db_helpers.py ← DB helpers with mocked sqlite3/os (11 tests)
+│   │   └── test_routes.py     ← Route functions called directly, get_db mocked (13 tests)
 │   ├── integration/
 │   │   └── test_db.py      ← DB helpers: get_db, close_db, init_db (7 tests)
 │   ├── api/
 │   │   └── test_endpoints.py ← HTTP endpoints via Flask test client (21 tests)
 │   └── e2e/
 │       ├── conftest.py     ← TodoPage POM + live_server_url fixture
-│       └── test_todo_ui.py ← Playwright E2E tests (34 tests)
+│       └── test_todo_ui.py ← Playwright E2E tests (31 tests)
 ├── requirements-test.txt   ← Test dependencies (never add to app/requirements.txt)
 ├── pytest.ini              ← testpaths, cov, --cov-fail-under=100
 ├── .coveragerc             ← Excludes if __name__ == '__main__'
@@ -65,12 +68,13 @@ cd app && DATABASE_PATH=/tmp/todos.db flask run
 
 ### Tests
 ```bash
-# All tests (integration + api + e2e) with coverage
+# All tests (unit + integration + api + e2e) with coverage
 pytest
 
 # By layer
-pytest tests/integration/   # DB helpers
-pytest tests/api/           # HTTP endpoints
+pytest tests/unit/          # Isolated helpers and routes (mocked DB)
+pytest tests/integration/   # DB helpers against real SQLite
+pytest tests/api/           # HTTP endpoints via Flask test client
 pytest tests/e2e/           # Playwright browser tests
 
 # E2E with visible browser (useful for demos)

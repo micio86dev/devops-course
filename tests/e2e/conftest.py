@@ -11,6 +11,8 @@ from app import app as flask_app
 class TodoPage:
     """Encapsulates every interaction with the todo UI.
 
+    All locators use data-testid attributes — never CSS classes or UI text —
+    so tests are decoupled from visual design and copy changes.
     All actions are fire-and-forget; assertions belong in the tests.
     """
 
@@ -22,12 +24,12 @@ class TodoPage:
 
     def goto(self) -> "TodoPage":
         self._page.goto(self._base_url)
-        self._page.wait_for_selector("#todo-list")
+        self._page.get_by_test_id("todo-list").wait_for()
         return self
 
     def reload(self) -> "TodoPage":
         self._page.reload()
-        self._page.wait_for_selector("#todo-list")
+        self._page.get_by_test_id("todo-list").wait_for()
         return self
 
     # actions
@@ -38,11 +40,11 @@ class TodoPage:
         For non-empty text, waits until JS clears the input after the POST
         completes. This prevents race conditions when chaining multiple adds.
         """
-        self._page.fill("#new-todo", text)
+        self._page.get_by_test_id("new-todo").fill(text)
         if via == "button":
-            self._page.click(".add-btn")
+            self._page.get_by_test_id("add-btn").click()
         else:
-            self._page.press("#new-todo", "Enter")
+            self._page.get_by_test_id("new-todo").press("Enter")
         if text.strip():
             self._page.wait_for_function(
                 "() => document.getElementById('new-todo').value === ''"
@@ -50,47 +52,47 @@ class TodoPage:
 
     def toggle(self, index: int = 0) -> None:
         """Click the checkbox of the todo at the given list index."""
-        self.items.nth(index).locator(".check").click()
+        self.items.nth(index).get_by_test_id("todo-check").click()
 
     def delete(self, index: int = 0) -> None:
         """Hover a row to reveal the delete button, then click it."""
         item = self.items.nth(index)
         item.hover()
-        item.locator(".del-btn").click()
+        item.get_by_test_id("todo-delete").click()
 
     # locators (lazy — evaluated on access, never stale)
 
     @property
     def items(self):
-        return self._page.locator(".todo-item")
+        return self._page.get_by_test_id("todo-item")
 
     @property
     def empty_state(self):
-        return self._page.locator(".empty")
+        return self._page.get_by_test_id("empty-state")
 
     @property
     def input(self):
-        return self._page.locator("#new-todo")
+        return self._page.get_by_test_id("new-todo")
 
     @property
     def title(self):
-        return self._page.locator("h1")
+        return self._page.get_by_test_id("app-title")
 
     @property
     def add_button(self):
-        return self._page.locator(".add-btn")
+        return self._page.get_by_test_id("add-btn")
 
     def stat(self, name: str):
         """Return the locator for a stats counter: 'total', 'done', or 'left'."""
-        return self._page.locator(f"#stat-{name}")
+        return self._page.get_by_test_id(f"stat-{name}")
 
     @property
     def stats(self) -> dict[str, int]:
         """Snapshot of all three counters as integers (no auto-wait)."""
         return {
-            "total": int(self._page.locator("#stat-total").text_content()),
-            "done":  int(self._page.locator("#stat-done").text_content()),
-            "left":  int(self._page.locator("#stat-left").text_content()),
+            "total": int(self._page.get_by_test_id("stat-total").text_content()),
+            "done":  int(self._page.get_by_test_id("stat-done").text_content()),
+            "left":  int(self._page.get_by_test_id("stat-left").text_content()),
         }
 
 

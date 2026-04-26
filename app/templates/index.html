@@ -195,21 +195,21 @@
 
 <header>
   <div class="label">▶ Docker CI/CD Demo</div>
-  <h1>todo<span>.py</span></h1>
+  <h1 data-testid="app-title">todo<span>.py</span></h1>
 </header>
 
 <div class="card">
   <div class="input-row">
     <div class="prompt">$&nbsp;</div>
-    <input id="new-todo" type="text" placeholder="add a task and press Enter..." autocomplete="off" />
-    <button class="add-btn" onclick="addTodo()">ADD</button>
+    <input id="new-todo" data-testid="new-todo" type="text" placeholder="add a task and press Enter..." autocomplete="off" />
+    <button class="add-btn" data-testid="add-btn" onclick="addTodo()">ADD</button>
   </div>
   <div class="stats">
-    total: <span id="stat-total">0</span> &nbsp;|&nbsp;
-    done: <span id="stat-done">0</span> &nbsp;|&nbsp;
-    left: <span id="stat-left">0</span>
+    total: <span id="stat-total" data-testid="stat-total">0</span> &nbsp;|&nbsp;
+    done: <span id="stat-done" data-testid="stat-done">0</span> &nbsp;|&nbsp;
+    left: <span id="stat-left" data-testid="stat-left">0</span>
   </div>
-  <ul id="todo-list"></ul>
+  <ul id="todo-list" data-testid="todo-list"></ul>
 </div>
 
 <footer>running inside <span>🐳 docker</span></footer>
@@ -227,15 +227,17 @@
   function render(todos) {
     list.innerHTML = '';
     if (!todos.length) {
-      list.innerHTML = '<li class="empty"><div class="icon">📭</div>no tasks yet</li>';
+      list.innerHTML = '<li class="empty" data-testid="empty-state"><div class="icon">📭</div>no tasks yet</li>';
     } else {
       todos.forEach(t => {
         const li = document.createElement('li');
         li.className = 'todo-item' + (t.done ? ' done' : '');
+        li.dataset.testid = 'todo-item';
+        li.dataset.done = t.done ? 'true' : 'false';
         li.innerHTML = `
-          <div class="check" onclick="toggle(${t.id})">${t.done ? '✓' : ''}</div>
-          <span class="todo-text">${escHtml(t.text)}</span>
-          <button class="del-btn" onclick="del(${t.id})" title="delete">✕</button>
+          <div class="check" data-testid="todo-check" onclick="toggle(${t.id})">${t.done ? '✓' : ''}</div>
+          <span class="todo-text" data-testid="todo-text">${escHtml(t.text)}</span>
+          <button class="del-btn" data-testid="todo-delete" onclick="del(${t.id})" title="delete">✕</button>
         `;
         list.appendChild(li);
       });
