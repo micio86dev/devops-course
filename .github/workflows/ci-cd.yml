@@ -49,23 +49,20 @@ jobs:
           cache-dependency-path: app/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r app/requirements.txt
+        run: pip install -r app/requirements.txt -r requirements-test.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps chromium
 
       - name: Lint with Ruff
         run: |
           pip install ruff
           ruff check app/
 
-      # Test minimale: avvia l'app e chiama /healthz
-      - name: Smoke test
+      - name: Run full test suite with coverage enforcement
         env:
           DATABASE_PATH: /tmp/test.db
-        run: |
-          cd app
-          flask run --host=127.0.0.1 --port=5001 &
-          sleep 3
-          curl --fail http://127.0.0.1:5001/healthz
-          kill %1
+        run: pytest --cov-fail-under=100
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 2 — build & push dell'immagine Docker

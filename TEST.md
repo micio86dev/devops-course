@@ -14,22 +14,26 @@ playwright install chromium      # download headless browser for e2e tests
 ## Run all tests
 
 ```bash
-pytest
+pytest --cov-fail-under=100
 ```
 
 pytest is configured in `pytest.ini` to:
 
 - look for tests under the `tests/` directory
 - measure coverage on `app/app.py`
-- fail the run if coverage drops below **100%**
+
+The `--cov-fail-under=100` flag must be passed explicitly when running the full
+suite so that the build fails if coverage drops below 100%.
+Per-layer runs (see below) display coverage for information but do not enforce
+the threshold, because a single layer cannot reach 100% by itself.
 
 ## Run by layer
 
 ```bash
-pytest tests/unit/          # Isolated helpers and routes (mocked DB, 24 tests)
+pytest tests/unit/          # Isolated helpers and routes (mocked DB, 27 tests)
 pytest tests/integration/   # DB helpers against real SQLite (7 tests)
-pytest tests/api/           # HTTP endpoints via Flask test client (21 tests)
-pytest tests/e2e/           # Playwright browser tests (31 tests)
+pytest tests/api/           # HTTP endpoints via Flask test client (23 tests)
+pytest tests/e2e/           # Playwright browser tests (32 tests)
 ```
 
 ## Run with verbose output

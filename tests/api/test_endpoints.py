@@ -58,6 +58,24 @@ class TestListTodos:
         assert todos[0]["text"] == "Newer"
         assert todos[1]["text"] == "Older"
 
+    def test_id_desc_tiebreaker_for_same_second(self, client):
+        # Two rows with identical created_at: higher id must appear first
+        with flask_app.app_context():
+            db = app_module.get_db()
+            db.execute(
+                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
+                ("First inserted", "2024-01-01 00:00:00"),
+            )
+            db.execute(
+                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
+                ("Second inserted", "2024-01-01 00:00:00"),
+            )
+            db.commit()
+
+        todos = client.get("/api/todos").get_json()
+        assert todos[0]["text"] == "Second inserted"
+        assert todos[1]["text"] == "First inserted"
+
 
 class TestCreateTodo:
     def test_valid_text_returns_201(self, client):
@@ -70,6 +88,11 @@ class TestCreateTodo:
         assert "id" in data
         assert isinstance(data["id"], int)
         assert data["done"] == 0
+
+    def test_response_includes_created_at(self, client):
+        data = client.post("/api/todos", json={"text": "Timestamped"}).get_json()
+        assert "created_at" in data
+        assert data["created_at"] is not None
 
     def test_strips_surrounding_whitespace(self, client):
         data = client.post("/api/todos", json={"text": "  Buy milk  "}).get_json()

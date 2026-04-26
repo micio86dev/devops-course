@@ -35,7 +35,24 @@ git pull origin develop
 
 ---
 
-## Step 3 — Read current version
+## Step 3 — Run full test suite
+
+Before touching any file or branch, verify the codebase is green.
+Activate the virtual environment if present, then run:
+
+```bash
+source .venv/bin/activate 2>/dev/null || true
+pytest --cov-fail-under=100
+```
+
+- If **any test fails** or coverage drops below 100%, stop immediately.
+- Report which tests failed and what the error was.
+- Ask the user whether to fix the failures first or abort the release.
+- Do **not** proceed to the version bump until the suite is fully green.
+
+---
+
+## Step 4 — Read current version
 
 Look for the version in this order and read the **first match**:
 
@@ -47,7 +64,7 @@ If none is found, start from `0.1.0` and tell the user.
 
 ---
 
-## Step 4 — Compute next version
+## Step 5 — Compute next version
 
 Apply SemVer 2.0.0 rules to the current version:
 
@@ -61,7 +78,7 @@ Show the user: `Bumping X.Y.Z → A.B.C (minor)` before continuing.
 
 ---
 
-## Step 5 — Open release branch
+## Step 6 — Open release branch
 
 ```bash
 git checkout -b release/A.B.C
@@ -69,7 +86,7 @@ git checkout -b release/A.B.C
 
 ---
 
-## Step 6 — Write new version to all files
+## Step 7 — Write new version to all files
 
 Update **every** file that contains the version. Do not skip any.
 
@@ -85,7 +102,7 @@ grep -r "__version__\|^version" app/ pyproject.toml setup.cfg 2>/dev/null
 
 ---
 
-## Step 7 — Commit the version bump
+## Step 8 — Commit the version bump
 
 ```bash
 git add -A
@@ -94,7 +111,7 @@ git commit -m "chore(release): bump version to A.B.C"
 
 ---
 
-## Step 8 — Merge into main
+## Step 9 — Merge into main
 
 ```bash
 git checkout main
@@ -104,7 +121,7 @@ git merge --no-ff release/A.B.C -m "chore(release): merge release/A.B.C into mai
 
 ---
 
-## Step 9 — Tag the release
+## Step 10 — Tag the release
 
 ```bash
 git tag -a vA.B.C -m "Release vA.B.C"
@@ -112,7 +129,7 @@ git tag -a vA.B.C -m "Release vA.B.C"
 
 ---
 
-## Step 10 — Back-merge into develop
+## Step 11 — Back-merge into develop
 
 ```bash
 git checkout develop
@@ -121,7 +138,7 @@ git merge --no-ff release/A.B.C -m "chore(release): back-merge release/A.B.C int
 
 ---
 
-## Step 11 — Delete the release branch
+## Step 12 — Delete the release branch
 
 ```bash
 git branch -d release/A.B.C
@@ -129,7 +146,7 @@ git branch -d release/A.B.C
 
 ---
 
-## Step 12 — Push everything
+## Step 13 — Push everything
 
 ```bash
 git push origin main develop --tags
@@ -138,7 +155,7 @@ git push origin --delete release/A.B.C 2>/dev/null || true
 
 ---
 
-## Step 13 — Summary
+## Step 14 — Summary
 
 Print a clear summary:
 

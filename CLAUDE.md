@@ -31,16 +31,16 @@ docker-todo/
 │   ├── conftest.py         ← Shared fixtures: app, clean_db (autouse)
 │   ├── unit/
 │   │   ├── test_db_helpers.py ← DB helpers with mocked sqlite3/os (11 tests)
-│   │   └── test_routes.py     ← Route functions called directly, get_db mocked (13 tests)
+│   │   └── test_routes.py     ← Route functions called directly, get_db mocked (16 tests)
 │   ├── integration/
 │   │   └── test_db.py      ← DB helpers: get_db, close_db, init_db (7 tests)
 │   ├── api/
-│   │   └── test_endpoints.py ← HTTP endpoints via Flask test client (21 tests)
+│   │   └── test_endpoints.py ← HTTP endpoints via Flask test client (23 tests)
 │   └── e2e/
 │       ├── conftest.py     ← TodoPage POM + live_server_url fixture
-│       └── test_todo_ui.py ← Playwright E2E tests (31 tests)
+│       └── test_todo_ui.py ← Playwright E2E tests (32 tests)
 ├── requirements-test.txt   ← Test dependencies (never add to app/requirements.txt)
-├── pytest.ini              ← testpaths, cov, --cov-fail-under=100
+├── pytest.ini              ← testpaths, cov (--cov-fail-under=100 passed explicitly)
 ├── .coveragerc             ← Excludes if __name__ == '__main__'
 ├── Dockerfile
 ├── docker-compose.yml      ← Local dev (hot reload, port 5001→5000)

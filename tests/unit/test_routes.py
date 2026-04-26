@@ -92,6 +92,30 @@ class TestCreateTodo:
         select_params = mock_db.execute.call_args_list[1][0][1]
         assert 42 in select_params
 
+    def test_empty_text_returns_400(self):
+        with flask_app.test_request_context(
+            "/api/todos", method="POST", json={"text": ""}
+        ):
+            response, status = app_module.create_todo()
+        assert status == 400
+        assert json.loads(response.get_data()) == {"error": "text is required"}
+
+    def test_whitespace_only_text_returns_400(self):
+        with flask_app.test_request_context(
+            "/api/todos", method="POST", json={"text": "   "}
+        ):
+            response, status = app_module.create_todo()
+        assert status == 400
+        assert json.loads(response.get_data()) == {"error": "text is required"}
+
+    def test_missing_text_key_returns_400(self):
+        with flask_app.test_request_context(
+            "/api/todos", method="POST", json={}
+        ):
+            response, status = app_module.create_todo()
+        assert status == 400
+        assert json.loads(response.get_data()) == {"error": "text is required"}
+
 
 class TestToggleTodo:
     def _mock_db(self, result_row):

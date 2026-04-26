@@ -50,6 +50,10 @@ class TestAddTodo:
         todo_page.add("Buy eggs", via="button")
         expect(todo_page.items.first).to_be_visible()
 
+    def test_todo_text_is_displayed_correctly(self, todo_page):
+        todo_page.add("My specific task")
+        expect(todo_page.items.first.get_by_test_id("todo-text")).to_have_text("My specific task")
+
     def test_input_is_cleared_after_add(self, todo_page):
         todo_page.add("Some task")
         expect(todo_page.items.first).to_be_visible()
@@ -78,8 +82,8 @@ class TestAddTodo:
         todo_page.add("Older")
         todo_page.add("Newer")
         expect(todo_page.items).to_have_count(2)
-        expect(todo_page.items.first).to_be_visible()
-        expect(todo_page.items.nth(1)).to_be_visible()
+        expect(todo_page.items.first.get_by_test_id("todo-text")).to_have_text("Newer")
+        expect(todo_page.items.nth(1).get_by_test_id("todo-text")).to_have_text("Older")
 
     def test_stats_update_after_add(self, todo_page):
         todo_page.add("Task A")
