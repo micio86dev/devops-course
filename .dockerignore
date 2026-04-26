@@ -1,0 +1,82 @@
+# ── Git ───────────────────────────────────────────────────────────────────────
+# Git history is not needed in the image and can add significant size
+.git/
+.gitignore
+.gitattributes
+
+# ── CI/CD ─────────────────────────────────────────────────────────────────────
+.github/
+
+# ── Docker files themselves ───────────────────────────────────────────────────
+# Avoids loops and reduces build context size
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Local virtualenvs ─────────────────────────────────────────────────────────
+# The venv is built by the Dockerfile — never copy it from the host machine
+.venv/
+venv/
+env/
+
+# ── Local databases ───────────────────────────────────────────────────────────
+# Data must never end up in the image
+*.db
+*.sqlite3
+*.sqlite
+/data/
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.*
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+# Test files, config, and output are never needed at runtime
+tests/
+requirements-test.txt
+pytest.ini
+.coveragerc
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+screenshots/
+playwright-report/
+test-results/
+
+# ── Linting / type checking ───────────────────────────────────────────────────
+.ruff_cache/
+.mypy_cache/
+
+# ── Claude Code / AI tooling ──────────────────────────────────────────────────
+# Skills and AI assistant config — not needed in the image
+.claude/
+CLAUDE.md
+skills-lock.json
+
+# ── Editor and OS ─────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+# Not needed at runtime — shaves a few KB from the build context
+README*
+*.md
+docs/

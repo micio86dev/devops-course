@@ -1,0 +1,37 @@
+# docker-compose.yml  ─  ambiente di sviluppo locale
+# Uso: docker compose up --build
+#
+# Differenze rispetto alla prod:
+#  • FLASK_DEBUG=1 → ricarica automatica al salvataggio del codice
+#  • Volume bind mount → modifica il codice senza rebuild
+#  • Nessun limite di risorse
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime          # usa lo stage "runtime" del multi-stage
+    image: docker-todo:dev
+    container_name: docker-todo-dev
+    ports:
+      - "5001:5000"
+    environment:
+      FLASK_DEBUG: "1"
+      DATABASE_PATH: /data/todos.db
+    volumes:
+      - ./app:/app             # bind mount: hot reload del codice
+      - todo-data:/data        # volume named: SQLite persiste tra restart
+    command: >
+      flask run --host=0.0.0.0 --port=5000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  todo-data:
