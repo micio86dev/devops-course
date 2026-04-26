@@ -1,14 +1,14 @@
 # ── Git ───────────────────────────────────────────────────────────────────────
-# La storia git non serve nell'immagine (può pesare parecchio)
+# Git history is not needed in the image and can add significant size
 .git/
 .gitignore
 .gitattributes
 
-# ── CI/CD ────────────────────────────────────────────────────────────────────
+# ── CI/CD ─────────────────────────────────────────────────────────────────────
 .github/
 
-# ── Docker stessi ────────────────────────────────────────────────────────────
-# Evita loop e riduce il build context
+# ── Docker files themselves ───────────────────────────────────────────────────
+# Avoids loops and reduces build context size
 Dockerfile*
 docker-compose*.yml
 .dockerignore
@@ -17,37 +17,53 @@ docker-compose*.yml
 __pycache__/
 *.py[cod]
 *.pyo
-.pytest_cache/
 *.egg-info/
 dist/
 build/
 .eggs/
 
-# ── Virtualenv locali ─────────────────────────────────────────────────────────
-# Il venv lo costruisce il Dockerfile, non prenderlo dalla macchina host
+# ── Local virtualenvs ─────────────────────────────────────────────────────────
+# The venv is built by the Dockerfile — never copy it from the host machine
 .venv/
 venv/
 env/
 
-# ── Database locali ───────────────────────────────────────────────────────────
-# I dati non devono mai finire nell'immagine
+# ── Local databases ───────────────────────────────────────────────────────────
+# Data must never end up in the image
 *.db
 *.sqlite3
 *.sqlite
 /data/
 
-# ── Variabili d'ambiente ──────────────────────────────────────────────────────
+# ── Environment variables ─────────────────────────────────────────────────────
 .env
 .env.*
 
-# ── Testing / linting ─────────────────────────────────────────────────────────
+# ── Testing ───────────────────────────────────────────────────────────────────
+# Test files, config, and output are never needed at runtime
+tests/
+requirements-test.txt
+pytest.ini
+.coveragerc
 .coverage
 htmlcov/
 .tox/
+.pytest_cache/
+screenshots/
+playwright-report/
+test-results/
+
+# ── Linting / type checking ───────────────────────────────────────────────────
 .ruff_cache/
 .mypy_cache/
 
-# ── Editor e OS ───────────────────────────────────────────────────────────────
+# ── Claude Code / AI tooling ──────────────────────────────────────────────────
+# Skills and AI assistant config — not needed in the image
+.claude/
+CLAUDE.md
+skills-lock.json
+
+# ── Editor and OS ─────────────────────────────────────────────────────────────
 .DS_Store
 .idea/
 .vscode/
@@ -55,12 +71,12 @@ htmlcov/
 *.swo
 Thumbs.db
 
-# ── Log ───────────────────────────────────────────────────────────────────────
+# ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 logs/
 
-# ── Documentazione ────────────────────────────────────────────────────────────
-# Non serve a runtime, taglia qualche KB di build context
+# ── Documentation ─────────────────────────────────────────────────────────────
+# Not needed at runtime — shaves a few KB from the build context
 README*
 *.md
 docs/
