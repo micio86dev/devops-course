@@ -7,7 +7,7 @@ app = Flask(__name__)
 DATABASE = os.environ.get("DATABASE_PATH", "/data/todos.db")
 
 
-# ── DB helpers ──────────────────────────────────────────────────────────────
+# ── DB helpers ───────────────────────────────────────────────────────────────
 
 def get_db():
     if "db" not in g:
@@ -48,14 +48,14 @@ def index():
 
 @app.route("/healthz")
 def health():
-    """Liveness probe used da Docker e dall'orchestratore."""
+    """Liveness probe used by Docker and the orchestrator."""
     return jsonify({"status": "ok"}), 200
 
 
 @app.route("/api/todos", methods=["GET"])
 def list_todos():
     rows = get_db().execute(
-        "SELECT * FROM todos ORDER BY created_at DESC"
+        "SELECT * FROM todos ORDER BY created_at DESC, id DESC"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -92,13 +92,13 @@ def delete_todo(todo_id):
     return "", 204
 
 
-# ── Inizializzazione DB ──────────────────────────────────────────────────────
-# A livello di modulo: gira sia con gunicorn (import) che con flask run.
+# ── DB initialisation ────────────────────────────────────────────────────────
+# Module-level: runs under both gunicorn (import) and flask run.
 with app.app_context():
     init_db()
 
 
-# ── Entrypoint ───────────────────────────────────────────────────────────────
+# ── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=os.environ.get("FLASK_DEBUG", "0") == "1")

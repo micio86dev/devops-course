@@ -15,7 +15,7 @@ services:
     image: docker-todo:dev
     container_name: docker-todo-dev
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       FLASK_DEBUG: "1"
       DATABASE_PATH: /data/todos.db
