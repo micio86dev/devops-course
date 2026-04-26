@@ -1,32 +1,32 @@
-# 🐳 Docker Todo — Guida CI/CD
+# Docker Todo — CI/CD Guide
 
-Mini todo app in Flask usata come esempio pratico per spiegare
-Docker, multi-stage build e CI/CD con GitHub Actions.
+A minimal todo app in Flask used as a hands-on example to explain
+Docker, multi-stage builds, and CI/CD with GitHub Actions.
 
 ---
 
-## Struttura del progetto
+## Project structure
 
 ```
 docker-todo/
 ├── app/
-│   ├── app.py              ← Flask backend + serve il frontend
+│   ├── app.py              ← Flask backend + serves the frontend
 │   ├── requirements.txt
 │   └── templates/
-│       └── index.html      ← Frontend vanilla JS
+│       └── index.html      ← Vanilla JS frontend
 │
 ├── Dockerfile              ← Multi-stage build (builder + runtime)
-├── docker-compose.yml      ← Ambiente di sviluppo locale
-├── docker-compose.prod.yml ← Override per produzione
+├── docker-compose.yml      ← Local development environment
+├── docker-compose.prod.yml ← Production overrides
 ├── .dockerignore
 └── .github/
     └── workflows/
-        └── ci-cd.yml       ← Pipeline GitHub Actions
+        └── ci-cd.yml       ← GitHub Actions pipeline
 ```
 
 ---
 
-## Avvio locale (senza Docker)
+## Running locally (without Docker)
 
 ```bash
 cd app
@@ -38,9 +38,9 @@ DATABASE_PATH=/tmp/todos.db flask run
 
 ---
 
-## Avvio con Docker
+## Running with Docker
 
-### Build manuale
+### Manual build
 
 ```bash
 # Build
@@ -52,55 +52,55 @@ docker run -p 5001:5000 -v todo-data:/data docker-todo
 # → http://localhost:5000
 ```
 
-### Con docker compose (dev, hot reload)
+### With docker compose (dev, hot reload)
 
 ```bash
 docker compose up --build
 # → http://localhost:5000
-# Modifica app/app.py → Flask si ricarica automaticamente
+# Edit app/app.py → Flask reloads automatically
 ```
 
 ---
 
-## Concetti Docker mostrati
+## Docker concepts demonstrated
 
 ### 1. Multi-stage build
 
-Il `Dockerfile` ha **due stage**:
+The `Dockerfile` has **two stages**:
 
-| Stage | Scopo |
-|-------|-------|
-| `builder` | installa pip + dipendenze in un venv |
-| `runtime` | copia solo il venv compilato + il codice |
+| Stage | Purpose |
+|-------|---------|
+| `builder` | installs pip + dependencies into a venv |
+| `runtime` | copies only the compiled venv + application code |
 
-Risultato: l'immagine finale **non contiene pip**, build tools o cache.
+Result: the final image **does not contain pip**, build tools, or cache.
 
 ```bash
-# Verifica dimensione immagine
+# Check image size
 docker images docker-todo
 ```
 
 ### 2. Layer caching
 
 ```dockerfile
-COPY requirements.txt .          # ← layer 1: cambia raramente
+COPY requirements.txt .              # ← layer 1: changes rarely
 RUN pip install -r requirements.txt  # ← layer 2: cacheable
 
-COPY app/ .                      # ← layer 3: cambia spesso
+COPY app/ .                          # ← layer 3: changes often
 ```
 
-Regola: **metti prima ciò che cambia meno** → rebuild veloci.
+Rule: **put what changes least first** → faster rebuilds.
 
 ```bash
-# Prima build (no cache)
+# First build (no cache)
 time docker build -t docker-todo .
 
-# Modifica solo app.py, poi rebuild → molto più veloce
+# Edit only app.py, then rebuild → much faster
 touch app/app.py
 time docker build -t docker-todo .
 ```
 
-### 3. Non girare come root
+### 3. Do not run as root
 
 ```dockerfile
 RUN useradd --system appuser
@@ -108,7 +108,7 @@ USER appuser
 ```
 
 ```bash
-# Verifica
+# Verify
 docker run --rm docker-todo whoami
 # → appuser
 ```
@@ -116,98 +116,98 @@ docker run --rm docker-todo whoami
 ### 4. Healthcheck
 
 ```bash
-# Vedi lo stato del container
+# Check container health status
 docker inspect --format='{{.State.Health.Status}}' docker-todo-dev
 
-# Output possibili: starting | healthy | unhealthy
+# Possible values: starting | healthy | unhealthy
 ```
 
-### 5. Volume per la persistenza
+### 5. Volume for persistence
 
 ```bash
-# I dati sopravvivono al riavvio del container
+# Data survives container restarts
 docker compose down
 docker compose up -d
-# → i todo sono ancora lì
+# → todos are still there
 ```
 
 ---
 
-## Pipeline CI/CD — GitHub Actions
+## CI/CD Pipeline — GitHub Actions
 
 ```
-push su main
+push to main
     │
     ▼
 ┌─────────┐     ┌──────────────┐     ┌────────┐
 │  test   │────▶│ build & push │────▶│ deploy │
-│         │     │   su GHCR    │     │  SSH   │
+│         │     │   to GHCR    │     │  SSH   │
 └─────────┘     └──────────────┘     └────────┘
 
-push su PR
+push on PR
     │
     ▼
 ┌─────────┐
-│  test   │  (solo lint + smoke test, no push)
+│  test   │  (lint + smoke test only, no push)
 └─────────┘
 ```
 
-### Secret da configurare nel repo GitHub
+### Secrets to configure in the GitHub repository
 
 ```
 Settings → Secrets and variables → Actions → New repository secret
 ```
 
-| Secret | Valore |
-|--------|--------|
-| `DEPLOY_HOST` | IP o hostname del server |
-| `DEPLOY_USER` | es. `ubuntu` |
-| `DEPLOY_SSH_KEY` | chiave privata SSH (PEM) |
+| Secret | Value |
+|--------|-------|
+| `DEPLOY_HOST` | server IP or hostname |
+| `DEPLOY_USER` | e.g. `ubuntu` |
+| `DEPLOY_SSH_KEY` | private SSH key (PEM) |
 
-### Aggiungere la chiave SSH al server
+### Adding the SSH key to the server
 
 ```bash
-# Sul tuo PC: genera una coppia di chiavi dedicata al deploy
+# On your machine: generate a dedicated deploy key pair
 ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/deploy_key
 
-# Sul server: aggiungi la chiave pubblica
+# On the server: add the public key
 cat ~/.ssh/deploy_key.pub >> ~/.ssh/authorized_keys
 
-# In GitHub: aggiungi il contenuto di deploy_key come secret DEPLOY_SSH_KEY
+# In GitHub: add the content of deploy_key as the DEPLOY_SSH_KEY secret
 cat ~/.ssh/deploy_key
 ```
 
-### Setup sul server di produzione
+### Production server setup
 
 ```bash
-# Sul server
-git clone https://github.com/TUO_USER/docker-todo.git ~/docker-todo
+# On the server
+git clone https://github.com/YOUR_USER/docker-todo.git ~/docker-todo
 
-# Login su GHCR (necessario per fare docker pull di immagini private)
+# Log in to GHCR (required to pull private images)
 echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
 ```
 
 ---
 
-## Comandi utili per la lezione
+## Useful commands for the lesson
 
 ```bash
-# Ispeziona i layer dell'immagine
+# Inspect image layers
 docker history docker-todo
 
-# Entra nel container in esecuzione
+# Enter a running container
 docker exec -it docker-todo-dev sh
 
-# Vedi i log in tempo reale
+# Stream logs in real time
 docker compose logs -f
 
-# Controlla uso risorse
+# Check resource usage
 docker stats
 
-# Vedi i volumi
+# List volumes
 docker volume ls
 docker volume inspect docker-todo_todo-data
 
-# Pulisci tutto (attenzione: cancella anche i volumi!)
+# Clean up everything (warning: also deletes volumes!)
 docker compose down -v
 ```
