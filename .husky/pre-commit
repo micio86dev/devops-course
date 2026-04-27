@@ -1,0 +1,5 @@
+#!/bin/sh
+# Activate project venv so ruff and mypy are available in PATH
+. .venv/bin/activate
+npx lint-staged
+python -m mypy app/

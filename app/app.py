@@ -1,6 +1,8 @@
 import os
 import sqlite3
-from flask import Flask, jsonify, request, render_template, g
+from typing import Any, cast
+
+from flask import Flask, Response, g, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -9,22 +11,23 @@ DATABASE = os.environ.get("DATABASE_PATH", "/data/todos.db")
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
 
-def get_db():
+
+def get_db() -> sqlite3.Connection:
     if "db" not in g:
         os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
         g.db = sqlite3.connect(DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
         g.db.row_factory = sqlite3.Row
-    return g.db
+    return cast(sqlite3.Connection, g.db)
 
 
 @app.teardown_appcontext
-def close_db(error):
+def close_db(error: BaseException | None) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
 
 
-def init_db():
+def init_db() -> None:
     db = get_db()
     db.execute(
         """
@@ -41,28 +44,28 @@ def init_db():
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+
 @app.route("/")
-def index():
+def index() -> str:
     return render_template("index.html")
 
 
 @app.route("/healthz")
-def health():
+def health() -> tuple[Response, int]:
     """Liveness probe used by Docker and the orchestrator."""
     return jsonify({"status": "ok"}), 200
 
 
 @app.route("/api/todos", methods=["GET"])
-def list_todos():
-    rows = get_db().execute(
-        "SELECT * FROM todos ORDER BY created_at DESC, id DESC"
-    ).fetchall()
+def list_todos() -> Response:
+    rows = get_db().execute("SELECT * FROM todos ORDER BY created_at DESC, id DESC").fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/todos", methods=["POST"])
-def create_todo():
-    body = request.get_json(silent=True) or {}
+def create_todo() -> tuple[Response, int]:
+    raw: Any = request.get_json(silent=True)
+    body: dict[str, Any] = raw if isinstance(raw, dict) else {}
     text = (body.get("text") or "").strip()
     if not text:
         return jsonify({"error": "text is required"}), 400
@@ -74,18 +77,18 @@ def create_todo():
 
 
 @app.route("/api/todos/<int:todo_id>/toggle", methods=["PATCH"])
-def toggle_todo(todo_id):
+def toggle_todo(todo_id: int) -> tuple[Response, int]:
     db = get_db()
     db.execute("UPDATE todos SET done = NOT done WHERE id = ?", (todo_id,))
     db.commit()
     row = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
     if row is None:
         return jsonify({"error": "not found"}), 404
-    return jsonify(dict(row))
+    return jsonify(dict(row)), 200
 
 
 @app.route("/api/todos/<int:todo_id>", methods=["DELETE"])
-def delete_todo(todo_id):
+def delete_todo(todo_id: int) -> tuple[str, int]:
     db = get_db()
     db.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
     db.commit()

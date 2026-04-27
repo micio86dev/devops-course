@@ -1,0 +1,30 @@
+{
+  "name": "docker-todo",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "app/**/*.py": [
+      "ruff format",
+      "ruff check --fix"
+    ],
+    "app/templates/**/*.{html,js,css}": [
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml,md}": [
+      "prettier --write"
+    ],
+    ".github/**/*.{yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0"
+  }
+}

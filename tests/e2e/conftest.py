@@ -1,12 +1,16 @@
 """E2E fixtures: live Flask server (session-scoped) and TodoPage POM."""
+
 import threading
+from collections.abc import Generator
+
 import pytest
+from playwright.sync_api import Locator, Page
 from werkzeug.serving import make_server
 
-from app import app as flask_app
-
+from app.app import app as flask_app
 
 # ── Page Object Model ─────────────────────────────────────────────────────────
+
 
 class TodoPage:
     """Encapsulates every interaction with the todo UI.
@@ -16,7 +20,7 @@ class TodoPage:
     All actions are fire-and-forget; assertions belong in the tests.
     """
 
-    def __init__(self, page, base_url: str) -> None:
+    def __init__(self, page: Page, base_url: str) -> None:
         self._page = page
         self._base_url = base_url
 
@@ -46,9 +50,7 @@ class TodoPage:
         else:
             self._page.get_by_test_id("new-todo").press("Enter")
         if text.strip():
-            self._page.wait_for_function(
-                "() => document.getElementById('new-todo').value === ''"
-            )
+            self._page.wait_for_function("() => document.getElementById('new-todo').value === ''")
 
     def toggle(self, index: int = 0) -> None:
         """Click the checkbox of the todo at the given list index."""
@@ -63,26 +65,26 @@ class TodoPage:
     # locators (lazy — evaluated on access, never stale)
 
     @property
-    def items(self):
+    def items(self) -> Locator:
         return self._page.get_by_test_id("todo-item")
 
     @property
-    def empty_state(self):
+    def empty_state(self) -> Locator:
         return self._page.get_by_test_id("empty-state")
 
     @property
-    def input(self):
+    def input(self) -> Locator:
         return self._page.get_by_test_id("new-todo")
 
     @property
-    def title(self):
+    def title(self) -> Locator:
         return self._page.get_by_test_id("app-title")
 
     @property
-    def add_button(self):
+    def add_button(self) -> Locator:
         return self._page.get_by_test_id("add-btn")
 
-    def stat(self, name: str):
+    def stat(self, name: str) -> Locator:
         """Return the locator for a stats counter: 'total', 'done', or 'left'."""
         return self._page.get_by_test_id(f"stat-{name}")
 
@@ -90,16 +92,17 @@ class TodoPage:
     def stats(self) -> dict[str, int]:
         """Snapshot of all three counters as integers (no auto-wait)."""
         return {
-            "total": int(self._page.get_by_test_id("stat-total").text_content()),
-            "done":  int(self._page.get_by_test_id("stat-done").text_content()),
-            "left":  int(self._page.get_by_test_id("stat-left").text_content()),
+            "total": int(self._page.get_by_test_id("stat-total").text_content() or "0"),
+            "done": int(self._page.get_by_test_id("stat-done").text_content() or "0"),
+            "left": int(self._page.get_by_test_id("stat-left").text_content() or "0"),
         }
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
-def live_server_url():
+def live_server_url() -> Generator[str, None, None]:
     """Start Flask once for the entire E2E session on a free OS-assigned port."""
     server = make_server("127.0.0.1", 0, flask_app)
     port = server.socket.getsockname()[1]
@@ -110,6 +113,6 @@ def live_server_url():
 
 
 @pytest.fixture
-def todo_page(page, live_server_url):
+def todo_page(page: Page, live_server_url: str) -> TodoPage:
     """Navigate to the app home page and return a ready-to-use TodoPage."""
     return TodoPage(page, live_server_url).goto()
