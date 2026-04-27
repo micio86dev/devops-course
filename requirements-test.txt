@@ -6,4 +6,8 @@ pytest-flask
 # e2e
 pytest-playwright
 
+# linting + type checking
+ruff
+mypy
+
 # After installing, run: playwright install chromium
