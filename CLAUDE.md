@@ -7,14 +7,14 @@ This file guides Claude Code when working on the project autonomously.
 
 ## Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.12 + Flask 3.1 |
-| Database | SQLite (`tests/test.db` for tests, `/data/todos.db` in production) |
-| Production server | Gunicorn 23 |
-| Frontend | Vanilla JS + HTML/CSS (served by Flask) |
-| Container | Docker multi-stage build |
-| CI/CD | GitHub Actions + GHCR |
+| Layer             | Technology                                                         |
+| ----------------- | ------------------------------------------------------------------ |
+| Backend           | Python 3.12 + Flask 3.1                                            |
+| Database          | SQLite (`tests/test.db` for tests, `/data/todos.db` in production) |
+| Production server | Gunicorn 23                                                        |
+| Frontend          | Vanilla JS + HTML/CSS (served by Flask)                            |
+| Container         | Docker multi-stage build                                           |
+| CI/CD             | GitHub Actions + GHCR                                              |
 
 ---
 
@@ -23,7 +23,8 @@ This file guides Claude Code when working on the project autonomously.
 ```
 docker-todo/
 ├── app/
-│   ├── app.py              ← Flask app (backend + routing)
+│   ├── app.py              ← Flask app (backend + routing, fully typed)
+│   ├── __init__.py         ← package marker + __version__
 │   ├── requirements.txt    ← Production dependencies only
 │   └── templates/
 │       └── index.html      ← Vanilla JS SPA frontend
@@ -39,9 +40,17 @@ docker-todo/
 │   └── e2e/
 │       ├── conftest.py     ← TodoPage POM + live_server_url fixture
 │       └── test_todo_ui.py ← Playwright E2E tests (32 tests)
-├── requirements-test.txt   ← Test dependencies (never add to app/requirements.txt)
+├── requirements-test.txt   ← Test + lint deps (ruff, mypy — never in app/requirements.txt)
+├── pyproject.toml          ← Ruff (format + lint) and MyPy strict config
+├── package.json            ← Husky, lint-staged, Prettier, commitlint
+├── commitlint.config.js    ← Conventional Commits enforcement
+├── .husky/
+│   ├── pre-commit          ← lint-staged (ruff + prettier) + mypy
+│   └── commit-msg          ← commitlint
+├── .prettierrc             ← Prettier config (HTML, JS, CSS, YAML, JSON, MD)
+├── .prettierignore
 ├── pytest.ini              ← testpaths, cov (--cov-fail-under=100 passed explicitly)
-├── .coveragerc             ← Excludes if __name__ == '__main__'
+├── .coveragerc             ← Excludes __main__ and app/__init__.py
 ├── Dockerfile
 ├── docker-compose.yml      ← Local dev (hot reload, port 5001→5000)
 ├── docker-compose.prod.yml ← Production override (gunicorn)
@@ -50,7 +59,7 @@ docker-todo/
 ├── TEST.md                 ← How to run tests (keep up to date)
 └── .github/
     └── workflows/
-        └── ci-cd.yml
+        └── ci-cd.yml       ← lint job (parallel) + test job → build-push → deploy
 ```
 
 ---
@@ -58,6 +67,7 @@ docker-todo/
 ## Essential commands
 
 ### Local dev
+
 ```bash
 # With Docker (hot reload) — app on http://localhost:5001
 docker compose up --build
@@ -67,6 +77,7 @@ cd app && DATABASE_PATH=/tmp/todos.db flask run
 ```
 
 ### Tests
+
 ```bash
 # All tests (unit + integration + api + e2e) with coverage
 pytest
@@ -85,6 +96,7 @@ pytest --cov-report=html && open htmlcov/index.html
 ```
 
 ### Docker
+
 ```bash
 # Build
 docker build -t docker-todo .
@@ -100,18 +112,19 @@ curl http://localhost:5001/healthz
 
 ## API endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Frontend HTML |
-| GET | `/healthz` | Liveness probe |
-| GET | `/api/todos` | List all todos (newest first) |
-| POST | `/api/todos` | Create todo (`{"text": "..."}`) |
-| PATCH | `/api/todos/<id>/toggle` | Toggle done/undone |
-| DELETE | `/api/todos/<id>` | Delete todo |
+| Method | Path                     | Description                     |
+| ------ | ------------------------ | ------------------------------- |
+| GET    | `/`                      | Frontend HTML                   |
+| GET    | `/healthz`               | Liveness probe                  |
+| GET    | `/api/todos`             | List all todos (newest first)   |
+| POST   | `/api/todos`             | Create todo (`{"text": "..."}`) |
+| PATCH  | `/api/todos/<id>/toggle` | Toggle done/undone              |
+| DELETE | `/api/todos/<id>`        | Delete todo                     |
 
 ### API responses
 
 Todo object:
+
 ```json
 {
   "id": 1,
@@ -122,6 +135,7 @@ Todo object:
 ```
 
 Errors:
+
 - `400` — missing body or empty `text`
 - `404` — todo not found (toggle only)
 - `204` — delete successful (no body)
@@ -165,11 +179,11 @@ the same app object and the same `tests/test.db`.
 
 ## Environment variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_PATH` | `/data/todos.db` | SQLite file path |
-| `FLASK_DEBUG` | `0` | `1` enables hot reload and debugger |
-| `FLASK_APP` | `app.py` | Flask entry point |
+| Variable        | Default          | Description                         |
+| --------------- | ---------------- | ----------------------------------- |
+| `DATABASE_PATH` | `/data/todos.db` | SQLite file path                    |
+| `FLASK_DEBUG`   | `0`              | `1` enables hot reload and debugger |
+| `FLASK_APP`     | `app.py`         | Flask entry point                   |
 
 ---
 
@@ -178,34 +192,37 @@ the same app object and the same `tests/test.db`.
 Skill files live in `.claude/skills/` and guide Claude Code on specific patterns.
 Read the relevant skill before working on the corresponding area.
 
-| Area | Skill file |
-|------|-----------|
-| Docker & CI/CD (project-specific) | `.claude/skills/docker-cicd.md` |
-| Playwright E2E best practices | `.claude/skills/playwright-best-practices/` |
-| Playwright browser automation CLI | `.claude/skills/playwright-cli` |
-| TDD & testing patterns | `.claude/skills/test-driven-development/` |
-| Systematic debugging | `.claude/skills/systematic-debugging/` |
-| GitHub Actions | `.claude/skills/github-actions-docs` |
-| Git workflow (branching, commits, PRs, releases) | `.claude/skills/git-workflow` |
-| API design (REST / GraphQL) | `.claude/skills/api-design-principles` |
-| Backend architecture (Clean Arch, DDD) | `.claude/skills/architecture-patterns` |
-| Python async & concurrency | `.claude/skills/async-python-patterns` |
-| Python performance & profiling | `.claude/skills/python-performance-optimization` |
-| Security review (OWASP, XSS, injection) | `.claude/skills/security-review` |
+| Area                                             | Skill file                                       |
+| ------------------------------------------------ | ------------------------------------------------ |
+| Docker & CI/CD (project-specific)                | `.claude/skills/docker-cicd.md`                  |
+| Playwright E2E best practices                    | `.claude/skills/playwright-best-practices/`      |
+| Playwright browser automation CLI                | `.claude/skills/playwright-cli`                  |
+| TDD & testing patterns                           | `.claude/skills/test-driven-development/`        |
+| Systematic debugging                             | `.claude/skills/systematic-debugging/`           |
+| GitHub Actions                                   | `.claude/skills/github-actions-docs`             |
+| Git workflow (branching, commits, PRs, releases) | `.claude/skills/git-workflow`                    |
+| API design (REST / GraphQL)                      | `.claude/skills/api-design-principles`           |
+| Backend architecture (Clean Arch, DDD)           | `.claude/skills/architecture-patterns`           |
+| Python async & concurrency                       | `.claude/skills/async-python-patterns`           |
+| Python performance & profiling                   | `.claude/skills/python-performance-optimization` |
+| Security review (OWASP, XSS, injection)          | `.claude/skills/security-review`                 |
 
 ---
 
 ## Conventions
 
 - **Never** use the Flask dev server in production — always gunicorn
-- **Never** commit `.env`, `*.db`, `*.pem`, `.venv/`
-- **Never** add test dependencies to `app/requirements.txt` — use `requirements-test.txt`
+- **Never** commit `.env`, `*.db`, `*.pem`, `.venv/`, `node_modules/`
+- **Never** add test/lint dependencies to `app/requirements.txt` — use `requirements-test.txt`
 - Tests **always** use `tests/test.db` — never the production DB
 - E2E live server always runs on a free OS-assigned port (`make_server(port=0)`)
 - Every new endpoint **must** have unit tests + at least one E2E test
 - Coverage must stay at **100%** (`--cov-fail-under=100` in `pytest.ini`)
 - Host port is **5001** (not 5000 — macOS AirPlay Receiver occupies 5000)
 - All code, comments, and docs must be written in **English**
+- All Python code in `app/` must pass `mypy --strict` (type annotations required)
+- Commit messages must follow **Conventional Commits** (`feat:`, `fix:`, `chore:`, etc.)
+- After `git clone` or when adding a new developer: run `npm install` to install git hooks
 
 ---
 
@@ -213,11 +230,11 @@ Read the relevant skill before working on the corresponding area.
 
 **Always keep the following files up to date** when making changes:
 
-| File | Update when |
-|------|------------|
-| `app/README.md` | project structure, stack, Docker commands, or CI/CD pipeline change |
-| `TEST.md` | new test types, new test commands, or test infrastructure changes |
-| `CLAUDE.md` (this file) | structure, stack, endpoints, conventions, or skills change |
+| File                    | Update when                                                         |
+| ----------------------- | ------------------------------------------------------------------- |
+| `app/README.md`         | project structure, stack, Docker commands, or CI/CD pipeline change |
+| `TEST.md`               | new test types, new test commands, or test infrastructure changes   |
+| `CLAUDE.md` (this file) | structure, stack, endpoints, conventions, or skills change          |
 
 Do not leave documentation stale. If you add an endpoint, update the API table.
 If you add a test layer, update both `TEST.md` and the project structure above.
@@ -233,3 +250,5 @@ If you move or rename a skill, update the Active skills table.
 - E2E tests are slower (~25 s) — only run them if you changed the frontend or routing
 - For gunicorn errors, check first: file ownership (`--chown`), `init_db()` outside `__main__`, port already in use
 - `done` is stored as INTEGER (0/1) in SQLite — assert `== 0` / `== 1`, not `False` / `True`
+- New Python functions in `app/` **must** have full type annotations (mypy strict enforces this)
+- `app/__init__.py` is excluded from coverage — it only holds `__version__` metadata

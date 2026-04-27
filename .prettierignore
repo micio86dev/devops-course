@@ -1,0 +1,11 @@
+node_modules/
+htmlcov/
+*.db
+*.txt
+*.ini
+*.cfg
+*.coveragerc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
