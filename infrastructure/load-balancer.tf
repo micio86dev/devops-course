@@ -13,13 +13,13 @@ resource "digitalocean_loadbalancer" "public" {
   # forwarding_rule: come instradare il traffico in entrata
   forwarding_rule {
     # entry_*: cosa il LB accetta DALL'ESTERNO
-    entry_port     = 80 # browser → http://<lb-ip>/
+    entry_port     = 80 # browser -> http://<lb-ip>/
     entry_protocol = "http"
 
     # target_*: dove inoltra ai nodi app
     target_port     = var.host_port # 5001 (porta esterna delle Droplet)
     target_protocol = "http"
-    # Nota: NON 80 sulle Droplet, ma 5001 — perché Docker espone su 5001
+    # Nota: NON 80 sulle Droplet, ma 5001 - perch'e Docker espone su 5001
   }
 
   # healthcheck: il LB testa periodicamente i nodi
@@ -29,12 +29,12 @@ resource "digitalocean_loadbalancer" "public" {
     path                     = "/" # endpoint da chiamare
     check_interval_seconds   = 10  # ogni 10 secondi
     response_timeout_seconds = 5   # max 5s di attesa
-    unhealthy_threshold      = 3   # 3 fail consecutivi → "down"
-    healthy_threshold        = 2   # 2 success consecutivi → "up"
+    unhealthy_threshold      = 3   # 3 fail consecutivi -> "down"
+    healthy_threshold        = 2   # 2 success consecutivi -> "up"
   }
 
   # droplet_ids: a quali nodi inoltrare il traffico
   # [*] = splat operator: prendi l'attributo da TUTTI gli elementi del count.
-  # digitalocean_droplet.app[*].id → [id_app1, id_app2]
+  # digitalocean_droplet.app[*].id -> [id_app1, id_app2]
   droplet_ids = digitalocean_droplet.app[*].id
 }

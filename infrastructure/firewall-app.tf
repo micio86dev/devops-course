@@ -14,7 +14,7 @@ resource "digitalocean_firewall" "app" {
 
   tags = local.common_tags
 
-  # === REGOLE INBOUND (chi può connettersi A queste Droplet) ===
+  # === REGOLE INBOUND (chi pu`o connettersi A queste Droplet) ===
 
   # SSH dall'esterno (per debug)
   inbound_rule {
@@ -28,11 +28,11 @@ resource "digitalocean_firewall" "app" {
   # HTTP sulla 5001 SOLO dal Load Balancer
   inbound_rule {
     protocol = "tcp"
-    # tostring(): converte numero → stringa (port_range vuole stringa!)
+    # tostring(): converte numero -> stringa (port_range vuole stringa!)
     port_range = tostring(var.host_port)
 
-    # source_load_balancer_uids: regola SPECIALE di DO — accetta solo
-    # se proviene dai LB elencati. Il pubblico NON può raggiungere :5001
+    # source_load_balancer_uids: regola SPECIALE di DO - accetta solo
+    # se proviene dai LB elencati. Il pubblico NON pu`o raggiungere :5001
     # direttamente, deve passare per il LB.
     source_load_balancer_uids = [digitalocean_loadbalancer.public.id]
   }

@@ -6,7 +6,7 @@
 
 output "load_balancer_ip" {
   description = "IP pubblico del Load Balancer (l'unico esposto agli utenti)"
-  # .ip è l'attributo del LB. Disponibile solo dopo creazione.
+  # .ip e' l'attributo del LB. Disponibile solo dopo creazione.
   value = digitalocean_loadbalancer.public.ip
 }
 
@@ -23,13 +23,25 @@ output "app_node_ips" {
 }
 
 output "db_node_ip" {
-  description = "IP pubblico del nodo DB"
+  description = "IP pubblico del nodo DB self-managed (per SSH di debug)"
   value       = digitalocean_droplet.db.ipv4_address
 }
 
-output "redis_node_ip" {
-  description = "IP pubblico del nodo Redis"
-  value       = digitalocean_droplet.redis.ipv4_address
+# CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
+# niente piu' cache_node_ip (la Droplet non esiste piu').
+# Al suo posto: hostname privato del cluster Valkey + URI sensibile.
+
+output "cache_host" {
+  description = "Hostname privato del Managed Valkey (visibile solo dalla VPC)"
+  value       = digitalocean_database_cluster.cache.private_host
+}
+
+output "cache_uri" {
+  description = "Connection URI completa di Valkey (con password!)"
+  value       = digitalocean_database_cluster.cache.private_uri
+  # sensitive = true: nasconde il valore nei log
+  # Per vederla: `terraform output cache_uri` (la stampa esplicitamente)
+  sensitive = true
 }
 
 output "project_name" {

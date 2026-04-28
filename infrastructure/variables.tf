@@ -40,10 +40,17 @@ variable "docker_image" {
   # nessun default: dipende dal progetto specifico
 }
 
+variable "container_name" {
+  description = "Nome del container Docker che gira sui nodi app"
+  type        = string
+  # docker-todo-prod = nome usato anche nel docker-compose.prod.yml
+  default = "docker-todo-prod"
+}
+
 variable "container_port" {
   description = "Porta INTERNA al container (quella in EXPOSE del Dockerfile)"
   type        = number
-  # 5000 perché il Dockerfile della todo-app fa EXPOSE 5000
+  # 5000 perche' il Dockerfile della todo-app fa EXPOSE 5000
   default = 5000
 }
 
@@ -53,6 +60,33 @@ variable "host_port" {
   # 5001 per coerenza con il setup di sviluppo locale
   default = 5001
 }
+
+# ============================================================================
+# Variabili NUOVE per il Managed Valkey
+# ============================================================================
+
+variable "cache_engine_version" {
+  description = "Versione Valkey del Managed Caching"
+  type        = string
+  # 8 = ultima major stabile (aprile 2026)
+  default = "8"
+}
+
+variable "cache_size" {
+  description = "Slug della size del cluster Valkey"
+  type        = string
+  # db-s-1vcpu-1gb = ~$15/mese, basic tier
+  default = "db-s-1vcpu-1gb"
+}
+
+variable "cache_node_count" {
+  description = "Numero di nodi del cluster Valkey (1 = no HA)"
+  type        = number
+  # 1 = nodo singolo. Produzione: 2+ per failover automatico.
+  default = 1
+}
+
+# ============================================================================
 
 variable "project_name" {
   description = "Nome del Project DigitalOcean (case-sensitive!)"

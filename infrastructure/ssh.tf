@@ -1,11 +1,11 @@
 # ============================================================================
 # ssh.tf
 # Carica la chiave SSH pubblica su DigitalOcean.
-# Verrà iniettata in /root/.ssh/authorized_keys di tutte le Droplet.
+# Verr`a iniettata in /root/.ssh/authorized_keys di tutte le Droplet.
 # ============================================================================
 
 resource "digitalocean_ssh_key" "default" {
-  # name: come la chiave appare nel pannello DO → Settings → Security
+  # name: come la chiave appare nel pannello DO -> Settings -> Security
   # "${var.x}" = interpolazione di variabile dentro stringa
   name = "${var.name_prefix}-key"
 

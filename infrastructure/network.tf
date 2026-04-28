@@ -8,7 +8,7 @@ resource "digitalocean_vpc" "main" {
   region = var.region
 
   # ip_range: subnet della VPC in notazione CIDR.
-  # 10.10.10.0/24 = 256 IP privati (10.10.10.0 → 10.10.10.255)
+  # 10.10.10.0/24 = 256 IP privati (10.10.10.0 -> 10.10.10.255)
   # /24 = primi 24 bit "rete", ultimi 8 "host"
   ip_range = "10.10.10.0/24"
 }
