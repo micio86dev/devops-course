@@ -1,0 +1,29 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - nfs-common
+  - netcat-openbsd
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+
+  - mkdir -p /mnt/todo-data
+  - |
+    for i in $(seq 1 60); do
+      nc -z ${db_private_ip} 2049 && break
+      echo "Waiting for NFS server (attempt $i/60)..."
+      sleep 5
+    done
+  - mount -t nfs ${db_private_ip}:/srv/todo-data /mnt/todo-data || echo "NFS mount failed, continuing"
+  - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults 0 0" >> /etc/fstab
+
+  - |
+    docker run -d --name todo-app --restart unless-stopped \
+      -p ${host_port}:80 \
+      nginx:alpine
