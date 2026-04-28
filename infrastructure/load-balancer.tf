@@ -24,13 +24,13 @@ resource "digitalocean_loadbalancer" "public" {
 
   # healthcheck: il LB testa periodicamente i nodi
   healthcheck {
-    port                     = var.host_port # controlla la 5001
+    port                     = var.host_port
     protocol                 = "http"
-    path                     = "/" # endpoint da chiamare
-    check_interval_seconds   = 10  # ogni 10 secondi
-    response_timeout_seconds = 5   # max 5s di attesa
-    unhealthy_threshold      = 3   # 3 fail consecutivi -> "down"
-    healthy_threshold        = 2   # 2 success consecutivi -> "up"
+    path                     = "/"           # cambia da "/healthz" a "/"
+    check_interval_seconds   = 10
+    response_timeout_seconds = 5
+    unhealthy_threshold      = 3
+    healthy_threshold        = 2
   }
 
   # droplet_ids: a quali nodi inoltrare il traffico

@@ -1,63 +1,29 @@
 #cloud-config
-# Cloud-init dei nodi app: installa Docker, monta NFS dal nodo DB,
-# avvia il container dell'applicazione todo.
-
 package_update: true
 package_upgrade: true
 
 packages:
-  - ca-certificates # Certificati TLS per https -> Docker Hub
-  - curl # Per scaricare lo script di installazione Docker
-  - gnupg # Per verificare firme GPG dei pacchetti Docker
-  - nfs-common # Client NFS (per montare share dal nodo DB)
-  - netcat-openbsd # `nc` per testare se la porta NFS e' raggiungibile
+  - ca-certificates
+  - curl
+  - gnupg
+  - nfs-common
+  - netcat-openbsd
 
 runcmd:
-  # ===== Installazione Docker =====
-  # curl -fsSL: -f fail su errori, -s silent, -S mostra errori, -L segue redirect
-  # | sh: pipe lo script direttamente a una shell che lo esegue
   - curl -fsSL https://get.docker.com | sh
-
-  # Avvia Docker e abilita avvio automatico
   - systemctl enable --now docker
 
-  # ===== Mount NFS dalla Droplet DB (resta self-managed con SQLite) =====
   - mkdir -p /mnt/todo-data
-
-  # Loop di attesa: il nodo DB potrebbe non essere pronto subito.
-  # Proviamo per 5 minuti (60 tentativi ogni 5 secondi) prima di rinunciare.
   - |
     for i in $(seq 1 60); do
       nc -z ${db_private_ip} 2049 && break
       echo "Waiting for NFS server (attempt $i/60)..."
       sleep 5
     done
-
-  # mount -t nfs: monta una share NFS
-  # ${db_private_ip} = placeholder: Terraform lo sostituisce via templatefile()
-  # || echo: se il mount fallisce, NON bloccare il resto dello script
   - mount -t nfs ${db_private_ip}:/srv/todo-data /mnt/todo-data || echo "NFS mount failed, continuing"
-
-  # /etc/fstab: il mount sopravvive al reboot
   - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults 0 0" >> /etc/fstab
 
-  # ===== Avvio del container Docker =====
-  # CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
-  # niente piu' REDIS_HOST e REDIS_PORT separati.
-  # Al loro posto: REDIS_URL completa (con credenziali e TLS).
-  # Formato: rediss://default:PASSWORD@host:25061
   - |
     docker run -d --name ${container_name} --restart unless-stopped \
-      -p ${host_port}:${container_port} \
-      -v /mnt/todo-data:/data \
-      -e DATABASE_PATH=/data/todos.db \
-      -e REDIS_URL="${cache_uri}" \
-      ${docker_image}
-    # -d                       = detached (background)
-    # --name ${container_name} = nome container (es. docker-todo-prod)
-    # --restart unless-stopped = riavvia se crasha (non se fermato a mano)
-    # -p 5001:5000             = mappa porta host:container
-    # -v ...                   = monta NFS dentro il container come /data
-    # -e DATABASE_PATH=...     = path del DB SQLite (matcha il Dockerfile)
-    # -e REDIS_URL=...         = connection URI completa di Valkey
-    # ${docker_image}          = nome immagine
+      -p ${host_port}:80 \
+      nginx:alpine

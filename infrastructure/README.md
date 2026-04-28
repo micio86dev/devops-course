@@ -127,7 +127,7 @@ Scadenza 30 giorni.
 
 > ⚠️ Se stai aggiornando da una versione precedente del corso, devi rigenerare il token per aggiungere lo scope `database`.
 
-**0.3** Sei già nella cartella `todo-app-infra-v2/`.
+**0.3** Sei già nella cartella `infrastructure/`.
 
 ---
 
