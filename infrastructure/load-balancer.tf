@@ -26,7 +26,7 @@ resource "digitalocean_loadbalancer" "public" {
   healthcheck {
     port                     = var.host_port
     protocol                 = "http"
-    path                     = "/"           # cambia da "/healthz" a "/"
+    path                     = "/" # cambia da "/healthz" a "/"
     check_interval_seconds   = 10
     response_timeout_seconds = 5
     unhealthy_threshold      = 3
