@@ -1,0 +1,27 @@
+# docker-compose.override.yml  ─  override sviluppo locale
+#
+# Caricato AUTOMATICAMENTE da Docker Compose quando non si specificano -f flag.
+# Uso: docker compose up --build
+#
+# Non e' usato da CI/CD: il workflow usa -f espliciti (base + prod).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: docker-todo:dev
+    container_name: docker-todo-dev
+    ports:
+      - "5001:5000"
+    environment:
+      FLASK_DEBUG: "1"
+    volumes:
+      - ./app:/app # bind mount: hot reload del codice senza rebuild
+      - todo-data:/data # volume named: SQLite persiste tra restart
+
+    command: flask run --host=0.0.0.0 --port=5000
+
+volumes:
+  todo-data:

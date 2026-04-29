@@ -3,6 +3,10 @@
 Mini Flask todo app used as a practical demo for Docker CI/CD lessons.
 This file guides Claude Code when working on the project autonomously.
 
+**Spec-Driven Development (SDD)**: behavioural specs live in `SPEC.md` (app + CI/CD) and
+`infrastructure/SPEC.md` (Terraform + cloud-init). Always check specs before implementing and
+update them whenever requirements change.
+
 ---
 
 ## Stack
@@ -52,14 +56,19 @@ docker-todo/
 ├── pytest.ini              ← testpaths, cov (--cov-fail-under=100 passed explicitly)
 ├── .coveragerc             ← Excludes __main__ and app/__init__.py
 ├── Dockerfile
-├── docker-compose.yml      ← Local dev (hot reload, port 5001→5000)
-├── docker-compose.prod.yml ← Production override (gunicorn)
+├── docker-compose.yml          ← Base condivisa (healthcheck, DATABASE_PATH, restart)
+├── docker-compose.override.yml ← Dev override (auto-caricato; bind mount, FLASK_DEBUG=1)
+├── docker-compose.prod.yml     ← Prod override (GHCR image, NFS, gunicorn, risorse)
 ├── .dockerignore
 ├── .gitignore
+├── SPEC.md                 ← SDD: behavioural specs for app, CI/CD, Docker
 ├── TEST.md                 ← How to run tests (keep up to date)
+├── infrastructure/
+│   ├── SPEC.md             ← SDD: infrastructure specs (Terraform, cloud-init, Valkey)
+│   └── ...                 ← Terraform files (provider, variables, droplets, LB, Valkey)
 └── .github/
     └── workflows/
-        └── ci-cd.yml       ← lint job (parallel) + test job → build-push → deploy
+        └── ci-cd.yml       ← lint job (parallel) + test job → build-push → deploy (all nodes)
 ```
 
 ---
@@ -69,10 +78,11 @@ docker-todo/
 ### Local dev
 
 ```bash
-# With Docker (hot reload) — app on http://localhost:5001
+# Con Docker (hot reload) — app su http://localhost:5001
+# Carica automaticamente docker-compose.yml + docker-compose.override.yml
 docker compose up --build
 
-# Without Docker
+# Senza Docker
 cd app && DATABASE_PATH=/tmp/todos.db flask run
 ```
 
@@ -179,11 +189,12 @@ the same app object and the same `tests/test.db`.
 
 ## Environment variables
 
-| Variable        | Default          | Description                         |
-| --------------- | ---------------- | ----------------------------------- |
-| `DATABASE_PATH` | `/data/todos.db` | SQLite file path                    |
-| `FLASK_DEBUG`   | `0`              | `1` enables hot reload and debugger |
-| `FLASK_APP`     | `app.py`         | Flask entry point                   |
+| Variable        | Default          | Description                                       |
+| --------------- | ---------------- | ------------------------------------------------- |
+| `DATABASE_PATH` | `/data/todos.db` | SQLite file path                                  |
+| `FLASK_DEBUG`   | `0`              | `1` enables hot reload and debugger               |
+| `FLASK_APP`     | `app.py`         | Flask entry point                                 |
+| `REDIS_URL`     | `` (empty)       | Valkey URI; written by cloud-init, app ignores it |
 
 ---
 
@@ -230,11 +241,13 @@ Read the relevant skill before working on the corresponding area.
 
 **Always keep the following files up to date** when making changes:
 
-| File                    | Update when                                                         |
-| ----------------------- | ------------------------------------------------------------------- |
-| `app/README.md`         | project structure, stack, Docker commands, or CI/CD pipeline change |
-| `TEST.md`               | new test types, new test commands, or test infrastructure changes   |
-| `CLAUDE.md` (this file) | structure, stack, endpoints, conventions, or skills change          |
+| File                     | Update when                                                         |
+| ------------------------ | ------------------------------------------------------------------- |
+| `app/README.md`          | project structure, stack, Docker commands, or CI/CD pipeline change |
+| `TEST.md`                | new test types, new test commands, or test infrastructure changes   |
+| `SPEC.md`                | app behaviour, CI/CD jobs, or Docker specs change                   |
+| `infrastructure/SPEC.md` | infrastructure topology, firewall rules, or bootstrap flow change   |
+| `CLAUDE.md` (this file)  | structure, stack, endpoints, conventions, or skills change          |
 
 Do not leave documentation stale. If you add an endpoint, update the API table.
 If you add a test layer, update both `TEST.md` and the project structure above.
@@ -252,3 +265,5 @@ If you move or rename a skill, update the Active skills table.
 - `done` is stored as INTEGER (0/1) in SQLite — assert `== 0` / `== 1`, not `False` / `True`
 - New Python functions in `app/` **must** have full type annotations (mypy strict enforces this)
 - `app/__init__.py` is excluded from coverage — it only holds `__version__` metadata
+- CI/CD deploy secret is `DEPLOY_HOSTS` (comma-separated app node IPs from `terraform output app_node_ips`), NOT a single `DEPLOY_HOST`
+- Valkey URI lives on each app node at `/root/docker-todo/.env.valkey` (written by cloud-init, mode 600)
