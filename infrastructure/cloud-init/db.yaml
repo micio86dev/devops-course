@@ -1,0 +1,16 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - nfs-kernel-server
+  - sqlite3
+
+runcmd:
+  - mkdir -p /srv/todo-data
+  - touch /srv/todo-data/todo.db
+  - chown -R nobody:nogroup /srv/todo-data
+  - chmod -R 0777 /srv/todo-data
+  - echo "/srv/todo-data 10.10.10.0/24(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+  - exportfs -ra
+  - systemctl enable --now nfs-kernel-server

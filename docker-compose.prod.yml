@@ -13,7 +13,7 @@ services:
       FLASK_DEBUG: "0"
       DATABASE_PATH: /data/todos.db
     volumes:
-      - todo-data:/data
+      - /mnt/todo-data:/data # bind mount al NFS gia' montato dal cloud-init
     # Nessun bind mount del codice in produzione!
     command:
       - gunicorn
@@ -35,6 +35,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  todo-data:
