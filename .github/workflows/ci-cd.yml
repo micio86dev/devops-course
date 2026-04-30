@@ -244,16 +244,25 @@ jobs:
             done
 
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+
+            # Export so every subsequent docker compose call sees them
+            export IMAGE_TAG=${{ github.ref_name }}
+            export GITHUB_REPOSITORY=${{ github.repository }}
+
             docker pull ghcr.io/${{ github.repository }}/docker-todo:${{ github.ref_name }}
-            IMAGE_TAG=${{ github.ref_name }} \
-            GITHUB_REPOSITORY=${{ github.repository }} \
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
               up -d --no-build
             docker image prune -f
             sleep 5
-            docker compose ps
+            # Pass the same -f flags here too: without them compose ps would
+            # auto-discover only docker-compose.yml (base) and miss the prod
+            # override that carries the image: key
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1
@@ -336,9 +345,11 @@ jobs:
             # Carica REDIS_URL dal file scritto dal cloud-init (Valkey URI)
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
 
+            # Export so every subsequent docker compose call sees them
+            export IMAGE_TAG=latest
+            export GITHUB_REPOSITORY=${{ github.repository }}
+
             docker pull ghcr.io/${{ github.repository }}/docker-todo:latest
-            IMAGE_TAG=latest \
-            GITHUB_REPOSITORY=${{ github.repository }} \
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
@@ -346,7 +357,11 @@ jobs:
 
             docker image prune -f
             sleep 5
-            docker compose ps
+            # Pass the same -f flags here too (see staging deploy comment)
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1
