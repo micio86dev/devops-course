@@ -73,10 +73,11 @@
 
 ### 4.1 Trigger rules
 
-| Spec ID | Assertion                                                                         |
-| ------- | --------------------------------------------------------------------------------- |
-| CI-01   | On **push to main/master**: run lint → test → build-push → deploy (all four jobs) |
-| CI-02   | On **pull request to main/master**: run lint + test only (no push, no deploy)     |
+| Spec ID | Assertion                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------ |
+| CI-01   | On **push to main/master**: run lint → test → build-push → deploy-production               |
+| CI-01b  | On **push of a `stage-*` tag** (any branch): run lint → test → build-push → deploy-staging |
+| CI-02   | On **pull request to main/master**: run lint + test only (no push, no deploy)              |
 
 ### 4.2 Lint job
 
@@ -96,15 +97,15 @@
 
 ### 4.4 Build & Push job
 
-| Spec ID | Assertion                                                                         |
-| ------- | --------------------------------------------------------------------------------- |
-| CI-09   | Runs only on `push` event (skipped on PR)                                         |
-| CI-10   | Multi-arch build: `linux/amd64` and `linux/arm64`                                 |
-| CI-11   | Image pushed to GHCR as `ghcr.io/<owner>/<repo>/docker-todo:<tag>`                |
-| CI-12   | Tags: `latest` (default branch), `sha-<short>` (always), `v<semver>` (if Git tag) |
-| CI-13   | Build cache stored in GHCR (mode=max) for layer reuse                             |
+| Spec ID | Assertion                                                                                                               |
+| ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| CI-09   | Runs only on `push` event (skipped on PR)                                                                               |
+| CI-10   | Multi-arch build: `linux/amd64` and `linux/arm64`                                                                       |
+| CI-11   | Image pushed to GHCR as `ghcr.io/<owner>/<repo>/docker-todo:<tag>`                                                      |
+| CI-12   | Tags: `latest` (default branch), `sha-<short>` (always), `v<semver>` (if semver Git tag), `<tag-name>` (if any Git tag) |
+| CI-13   | Build cache stored in GHCR (mode=max) for layer reuse                                                                   |
 
-### 4.5 Deploy job
+### 4.5 Deploy jobs
 
 | Spec ID | Assertion                                                                                                                    |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -113,6 +114,9 @@
 | CI-16   | `REDIS_URL` is sourced from `/root/docker-todo/.env.valkey` before `docker compose up`                                       |
 | CI-17   | Post-deploy healthcheck hits `http://localhost:5001/healthz` on each node and exits 1 on failure                             |
 | CI-18   | Old dangling images are pruned after successful update                                                                       |
+| CI-19   | `deploy-production` runs only when `github.ref` is `refs/heads/main` or `refs/heads/master`; uses environment `production`   |
+| CI-20   | `deploy-staging` runs only when `github.ref` starts with `refs/tags/stage-`; uses environment `staging`                      |
+| CI-21   | Staging deploy pulls the image tagged with the git tag name (`github.ref_name`), not `:latest`                               |
 
 ### 4.6 Required GitHub Secrets
 
