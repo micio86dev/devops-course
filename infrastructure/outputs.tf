@@ -27,6 +27,11 @@ output "db_node_ip" {
   value       = digitalocean_droplet.db.ipv4_address
 }
 
+output "db_private_ip" {
+  description = "IP privato (VPC) del nodo DB. Usato dagli app node per montare NFS."
+  value       = digitalocean_droplet.db.ipv4_address_private
+}
+
 # CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
 # niente piu' cache_node_ip (la Droplet non esiste piu').
 # Al suo posto: hostname privato del cluster Valkey + URI sensibile.

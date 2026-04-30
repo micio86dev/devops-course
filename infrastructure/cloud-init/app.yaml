@@ -26,6 +26,9 @@ runcmd:
       echo "Waiting for NFS server (attempt $i/60)..."
       sleep 5
     done
+  # Save NFS server IP so deploy script can self-heal if cloud-init failed
+  # before writing fstab (the deploy reconstructs the fstab line from this)
+  - echo "${db_private_ip}" > /etc/nfs-server-ip
   # Add fstab entry first so we can `mount /mnt/todo-data` and rely on
   # _netdev for proper ordering on reboot
   - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab

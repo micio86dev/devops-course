@@ -213,10 +213,24 @@ jobs:
               systemctl enable --now docker
             fi
 
-            # Self-heal NFS mount: cloud-init may have tried too early.
-            # /etc/fstab already has the entry, so `mount /mnt/todo-data`
-            # uses it. Retry a few times for slow NFS servers.
+            # Self-heal NFS mount.
+            # If cloud-init didn't write the fstab entry, reconstruct it from
+            # /etc/nfs-server-ip (written by cloud-init) or NFS_SERVER_IP var.
             mkdir -p /mnt/todo-data
+            if ! grep -q '/mnt/todo-data' /etc/fstab; then
+              NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+              if [ -z "$NFS_IP" ]; then
+                echo "❌ No NFS server IP available."
+                echo "Either /etc/nfs-server-ip is missing (broken cloud-init)"
+                echo "or the NFS_SERVER_IP GitHub variable is unset."
+                echo "Run: terraform output -raw db_private_ip"
+                echo "and set it as a 'staging' environment variable in GitHub."
+                exit 1
+              fi
+              echo "Reconstructing fstab entry: NFS server $NFS_IP"
+              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+            fi
+
             if ! mountpoint -q /mnt/todo-data; then
               echo "/mnt/todo-data not mounted, retrying..."
               for i in $(seq 1 12); do
@@ -358,8 +372,15 @@ jobs:
 
             # Self-heal NFS mount (see staging deploy comment for details)
             mkdir -p /mnt/todo-data
+            if ! grep -q '/mnt/todo-data' /etc/fstab; then
+              NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+              if [ -z "$NFS_IP" ]; then
+                echo "❌ No NFS server IP available. Set NFS_SERVER_IP in GitHub vars."
+                exit 1
+              fi
+              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+            fi
             if ! mountpoint -q /mnt/todo-data; then
-              echo "/mnt/todo-data not mounted, retrying..."
               for i in $(seq 1 12); do
                 mount /mnt/todo-data 2>/dev/null && break
                 echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
