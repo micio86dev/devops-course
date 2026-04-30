@@ -10,8 +10,10 @@ packages:
   - netcat-openbsd
 
 runcmd:
-  # Install Docker (includes compose plugin)
-  - curl -fsSL https://get.docker.com | sh
+  # Install Docker via apt (more reliable than curl|sh in cloud-init:
+  # the get.docker.com script uses apt internally and can hit dpkg locks
+  # left behind by the package_upgrade phase above)
+  - apt-get install -y docker.io docker-compose-v2
   - systemctl enable --now docker
 
   # NFS mount for shared SQLite volume
