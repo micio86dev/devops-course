@@ -192,6 +192,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target dir).
+      # MUST run before SCP, otherwise SCP can race against cloud-init still
+      # creating /root/docker-todo and silently leave the dir partially populated.
+      - name: Prepare staging nodes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            echo "Waiting for cloud-init to complete..."
+            cloud-init status --wait || echo "cloud-init reported errors, continuing"
+            if ! command -v docker &>/dev/null; then
+              echo "Docker not found, installing via apt..."
+              apt-get update -qq
+              apt-get install -y docker.io docker-compose-v2
+              systemctl enable --now docker
+            fi
+            mkdir -p /root/docker-todo
+
       - name: Copy compose files to staging nodes
         uses: appleboy/scp-action@v1
         with:
@@ -208,26 +231,18 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # 20m: cloud-init with package_upgrade can take 10-15+ min on fresh droplet
-          command_timeout: 20m
+          command_timeout: 10m
           script: |
             set -e
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-            # Block until cloud-init reports done (handles fresh droplets
-            # still running package_upgrade)
-            echo "Waiting for cloud-init to complete..."
-            cloud-init status --wait || echo "cloud-init reported errors, continuing"
-
-            # Self-heal: install Docker if cloud-init didn't (or failed to)
-            if ! command -v docker &>/dev/null; then
-              echo "Docker not found, installing via apt..."
-              apt-get update -qq
-              apt-get install -y docker.io docker-compose-v2
-              systemctl enable --now docker
-            fi
-
             cd /root/docker-todo
+
+            # Sanity check: both compose files must be present and non-empty
+            for f in docker-compose.yml docker-compose.prod.yml; do
+              [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
+            done
+
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
             docker pull ghcr.io/${{ github.repository }}/docker-todo:${{ github.ref_name }}
             IMAGE_TAG=${{ github.ref_name }} \
@@ -268,8 +283,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Copia i file compose su tutti i nodi prima del deploy.
-      # Garantisce che ~/docker-todo/ contenga sempre la versione corrente.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target dir).
+      # Must run before SCP to avoid race against cloud-init.
+      - name: Prepare production nodes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            echo "Waiting for cloud-init to complete..."
+            cloud-init status --wait || echo "cloud-init reported errors, continuing"
+            if ! command -v docker &>/dev/null; then
+              echo "Docker not found, installing via apt..."
+              apt-get update -qq
+              apt-get install -y docker.io docker-compose-v2
+              systemctl enable --now docker
+            fi
+            mkdir -p /root/docker-todo
+
       - name: Copy compose files to production nodes
         uses: appleboy/scp-action@v1
         with:
@@ -286,36 +321,22 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          # 20m: cloud-init with package_upgrade can take 10-15+ min on fresh droplet
-          command_timeout: 20m
+          command_timeout: 10m
           script: |
             set -e
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-            # Block until cloud-init reports done (handles fresh droplets
-            # still running package_upgrade)
-            echo "Waiting for cloud-init to complete..."
-            cloud-init status --wait || echo "cloud-init reported errors, continuing"
-
-            # Self-heal: install Docker if cloud-init didn't (or failed to)
-            if ! command -v docker &>/dev/null; then
-              echo "Docker not found, installing via apt..."
-              apt-get update -qq
-              apt-get install -y docker.io docker-compose-v2
-              systemctl enable --now docker
-            fi
-
-            # Vai nella directory del progetto sul server
             cd /root/docker-todo
 
+            # Sanity check: both compose files must be present and non-empty
+            for f in docker-compose.yml docker-compose.prod.yml; do
+              [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
+            done
+
             # Carica REDIS_URL dal file scritto dal cloud-init (Valkey URI)
-            # Il file e' 600 (solo root) e non entra mai in git o nell'immagine
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
 
-            # Scarica l'immagine aggiornata dal registry
             docker pull ghcr.io/${{ github.repository }}/docker-todo:latest
-
-            # Riavvia con zero downtime (rolling update)
             IMAGE_TAG=latest \
             GITHUB_REPOSITORY=${{ github.repository }} \
             docker compose \
@@ -323,10 +344,7 @@ jobs:
               -f docker-compose.prod.yml \
               up -d --no-build
 
-            # Rimuovi immagini vecchie (dangling) per liberare spazio
             docker image prune -f
-
-            # Verifica che il container sia healthy
             sleep 5
             docker compose ps
 
