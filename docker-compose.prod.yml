@@ -1,20 +1,23 @@
-# docker-compose.prod.yml  ─  override per produzione
+# docker-compose.prod.yml  ─  override produzione
 # Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # In CI/CD questo file viene usato dopo il push dell'immagine su GHCR.
 # L'immagine viene presa dal registry (non buildata localmente).
+# GITHUB_REPOSITORY e IMAGE_TAG vengono iniettati dal workflow.
+# REDIS_URL viene letta da /root/docker-todo/.env.valkey (scritto dal cloud-init).
 
 services:
   app:
     image: ghcr.io/${GITHUB_REPOSITORY}/docker-todo:${IMAGE_TAG:-latest}
     container_name: docker-todo-prod
     restart: always
+    ports:
+      - "5001:5000"
     environment:
       FLASK_DEBUG: "0"
-      DATABASE_PATH: /data/todos.db
+      REDIS_URL: ${REDIS_URL:-} # Valkey URI; app non lo usa (demo infrastrutturale)
     volumes:
-      - todo-data:/data
-    # Nessun bind mount del codice in produzione!
+      - /mnt/todo-data:/data # NFS montato dal cloud-init; nessun bind mount del codice
     command:
       - gunicorn
       - --bind=0.0.0.0:5000
@@ -35,6 +38,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  todo-data:
