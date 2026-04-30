@@ -213,6 +213,13 @@ jobs:
               systemctl enable --now docker
             fi
 
+            # Ensure NFS client tools are present (old droplets may lack nfs-common)
+            if ! dpkg -l nfs-common &>/dev/null; then
+              echo "nfs-common not found, installing..."
+              apt-get update -qq
+              apt-get install -y nfs-common
+            fi
+
             # Self-heal NFS mount.
             # If cloud-init didn't write the fstab entry, reconstruct it from
             # /etc/nfs-server-ip (written by cloud-init) or NFS_SERVER_IP var.
@@ -368,6 +375,13 @@ jobs:
               apt-get update -qq
               apt-get install -y docker.io docker-compose-v2
               systemctl enable --now docker
+            fi
+
+            # Ensure NFS client tools are present (old droplets may lack nfs-common)
+            if ! dpkg -l nfs-common &>/dev/null; then
+              echo "nfs-common not found, installing..."
+              apt-get update -qq
+              apt-get install -y nfs-common
             fi
 
             # Self-heal NFS mount (see staging deploy comment for details)
