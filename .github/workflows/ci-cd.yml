@@ -192,9 +192,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target dir).
-      # MUST run before SCP, otherwise SCP can race against cloud-init still
-      # creating /root/docker-todo and silently leave the dir partially populated.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
+      # ensure target dir). MUST run before SCP — otherwise SCP can race
+      # against cloud-init still creating /root/docker-todo.
       - name: Prepare staging nodes
         uses: appleboy/ssh-action@v1
         with:
@@ -207,12 +207,38 @@ jobs:
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             echo "Waiting for cloud-init to complete..."
             cloud-init status --wait || echo "cloud-init reported errors, continuing"
+
             if ! command -v docker &>/dev/null; then
               echo "Docker not found, installing via apt..."
               apt-get update -qq
               apt-get install -y docker.io docker-compose-v2
               systemctl enable --now docker
             fi
+
+            # Self-heal NFS mount: cloud-init may have tried too early.
+            # /etc/fstab already has the entry, so `mount /mnt/todo-data`
+            # uses it. Retry a few times for slow NFS servers.
+            mkdir -p /mnt/todo-data
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "/mnt/todo-data not mounted, retrying..."
+              for i in $(seq 1 12); do
+                mount /mnt/todo-data 2>/dev/null && break
+                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
+                sleep 10
+              done
+            fi
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "❌ NFS mount failed after 2 min — aborting"
+              echo "--- /etc/fstab ---"
+              cat /etc/fstab
+              echo "--- mount attempt error ---"
+              mount /mnt/todo-data 2>&1 || true
+              exit 1
+            fi
+            # Container appuser writes /data/todos.db; permissive perms on
+            # the NFS mount let the non-root UID write to the share
+            chmod 777 /mnt/todo-data
+
             mkdir -p /root/docker-todo
 
       - name: Copy compose files to staging nodes
@@ -310,8 +336,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target dir).
-      # Must run before SCP to avoid race against cloud-init.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
+      # ensure target dir). Must run before SCP to avoid race.
       - name: Prepare production nodes
         uses: appleboy/ssh-action@v1
         with:
@@ -324,12 +350,32 @@ jobs:
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             echo "Waiting for cloud-init to complete..."
             cloud-init status --wait || echo "cloud-init reported errors, continuing"
+
             if ! command -v docker &>/dev/null; then
               echo "Docker not found, installing via apt..."
               apt-get update -qq
               apt-get install -y docker.io docker-compose-v2
               systemctl enable --now docker
             fi
+
+            # Self-heal NFS mount (see staging deploy comment for details)
+            mkdir -p /mnt/todo-data
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "/mnt/todo-data not mounted, retrying..."
+              for i in $(seq 1 12); do
+                mount /mnt/todo-data 2>/dev/null && break
+                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
+                sleep 10
+              done
+            fi
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "❌ NFS mount failed after 2 min — aborting"
+              cat /etc/fstab
+              mount /mnt/todo-data 2>&1 || true
+              exit 1
+            fi
+            chmod 777 /mnt/todo-data
+
             mkdir -p /root/docker-todo
 
       - name: Copy compose files to production nodes
