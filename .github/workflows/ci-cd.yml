@@ -30,6 +30,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/docker-todo
+  # Opt into Node.js 24 for all actions (including third-party docker/* actions)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
@@ -157,7 +159,7 @@ jobs:
           tags: |
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=tag
 
       # Build multi-arch e push su GHCR
@@ -208,6 +210,16 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+            # Wait for cloud-init / Docker install to finish (up to 5 min)
+            for i in $(seq 1 30); do
+              command -v docker &>/dev/null && break
+              echo "Waiting for Docker... ($i/30)"
+              sleep 10
+            done
+            command -v docker || { echo "Docker not found after 5 min"; exit 1; }
+
             cd /root/docker-todo
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
             docker pull ghcr.io/${{ github.repository }}/docker-todo:${{ github.ref_name }}
@@ -269,6 +281,15 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+            # Wait for cloud-init / Docker install to finish (up to 5 min)
+            for i in $(seq 1 30); do
+              command -v docker &>/dev/null && break
+              echo "Waiting for Docker... ($i/30)"
+              sleep 10
+            done
+            command -v docker || { echo "Docker not found after 5 min"; exit 1; }
 
             # Vai nella directory del progetto sul server
             cd /root/docker-todo
