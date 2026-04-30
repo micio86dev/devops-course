@@ -6,9 +6,10 @@
 #   • Pull Request su main  → lint + test (no push, no deploy)
 #
 # Secret necessari nel repo GitHub:
-#   • DEPLOY_HOST     — IP o hostname del server di produzione
-#   • DEPLOY_USER     — utente SSH (es. ubuntu)
-#   • DEPLOY_SSH_KEY  — chiave privata SSH (PEM) per accedere al server
+#   • DEPLOY_HOSTS    — IP pubblici dei nodi app separati da virgola (es. 1.2.3.4,5.6.7.8)
+#                       Ottenibili con: terraform output app_node_ips
+#   • DEPLOY_USER     — utente SSH (root per Droplet DigitalOcean di default)
+#   • DEPLOY_SSH_KEY  — chiave privata SSH (PEM) per accedere ai nodi
 
 name: CI/CD
 
@@ -168,8 +169,10 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
 
   # ────────────────────────────────────────────────────────────────────────────
-  # JOB 4 — deploy su server di produzione via SSH
+  # JOB 4 — deploy su tutti i nodi app via SSH
   # Gira solo dopo build-push riuscito.
+  # DEPLOY_HOSTS: IP pubblici dei nodi (comma-separated).
+  # appleboy/ssh-action li esegue in parallelo su tutti gli host.
   # ────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to Production
@@ -181,17 +184,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Copia i file compose su tutti i nodi prima del deploy.
+      # Garantisce che ~/docker-todo/ contenga sempre la versione corrente.
+      - name: Copy compose files to production nodes
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker-compose.yml,docker-compose.prod.yml"
+          target: "/root/docker-todo"
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
+          host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
 
             # Vai nella directory del progetto sul server
-            cd ~/docker-todo
+            cd /root/docker-todo
+
+            # Carica REDIS_URL dal file scritto dal cloud-init (Valkey URI)
+            # Il file e' 600 (solo root) e non entra mai in git o nell'immagine
+            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
 
             # Scarica l'immagine aggiornata dal registry
             docker pull ghcr.io/${{ github.repository }}/docker-todo:latest
@@ -214,10 +233,11 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
+          host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            curl --fail --silent http://localhost:5000/healthz \
+            # Porta 5001: mappatura host del container (5001:5000)
+            curl --fail --silent http://localhost:5001/healthz \
               && echo "✅ Deploy OK" \
               || (echo "❌ Healthcheck fallito!" && exit 1)

@@ -10,9 +10,11 @@ packages:
   - netcat-openbsd
 
 runcmd:
+  # Install Docker (includes compose plugin)
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
 
+  # NFS mount for shared SQLite volume
   - mkdir -p /mnt/todo-data
   - |
     for i in $(seq 1 60); do
@@ -23,7 +25,10 @@ runcmd:
   - mount -t nfs ${db_private_ip}:/srv/todo-data /mnt/todo-data || echo "NFS mount failed, continuing"
   - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults 0 0" >> /etc/fstab
 
-  - |
-    docker run -d --name ${container_name} --restart unless-stopped \
-      -p ${host_port}:80 \
-      nginx:alpine
+  # Create deployment directory — CI/CD expects ~/docker-todo to exist
+  - mkdir -p /root/docker-todo
+
+  # Write Valkey URI so CI/CD can source it for REDIS_URL injection
+  # File is root-only (600): contains credentials, never world-readable
+  - echo "REDIS_URL=${cache_uri}" > /root/docker-todo/.env.valkey
+  - chmod 600 /root/docker-todo/.env.valkey
