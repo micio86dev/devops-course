@@ -10,21 +10,37 @@ packages:
   - netcat-openbsd
 
 runcmd:
-  # Install Docker (includes compose plugin)
-  - curl -fsSL https://get.docker.com | sh
+  # Install Docker via apt (more reliable than curl|sh in cloud-init:
+  # the get.docker.com script uses apt internally and can hit dpkg locks
+  # left behind by the package_upgrade phase above)
+  - apt-get install -y docker.io docker-compose-v2
   - systemctl enable --now docker
 
   # NFS mount for shared SQLite volume
   - mkdir -p /mnt/todo-data
+  # Wait for the NFS server's TCP port to be open (server cloud-init may
+  # still be running package_upgrade)
   - |
     for i in $(seq 1 60); do
       nc -z ${db_private_ip} 2049 && break
       echo "Waiting for NFS server (attempt $i/60)..."
       sleep 5
     done
-  - mount -t nfs ${db_private_ip}:/srv/todo-data /mnt/todo-data || echo "NFS mount failed, continuing"
-  - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults 0 0" >> /etc/fstab
-
+  # Save NFS server IP so deploy script can self-heal if cloud-init failed
+  # before writing fstab (the deploy reconstructs the fstab line from this)
+  - echo "${db_private_ip}" > /etc/nfs-server-ip
+  # Add fstab entry first so we can `mount /mnt/todo-data` and rely on
+  # _netdev for proper ordering on reboot
+  - echo "${db_private_ip}:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+  # Retry the mount: even after port 2049 opens the export may not be
+  # ready for ~30s while the kernel server initialises
+  - |
+    for i in $(seq 1 12); do
+      mount /mnt/todo-data && break
+      echo "NFS mount attempt $i/12 failed, retrying in 10s..."
+      sleep 10
+    done
+  - mountpoint -q /mnt/todo-data || echo "WARN: NFS still not mounted after retries"
   # Create deployment directory — CI/CD expects ~/docker-todo to exist
   - mkdir -p /root/docker-todo
 

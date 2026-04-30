@@ -2,10 +2,11 @@
 #
 # Pipeline CI/CD completa per Docker.
 # Trigger:
-#   • Push su main/master   → lint + test + build + push immagine + deploy
+#   • Push su main/master   → lint + test + build + push immagine + deploy production
+#   • Push tag stage-*      → lint + test + build + push immagine + deploy staging
 #   • Pull Request su main  → lint + test (no push, no deploy)
 #
-# Secret necessari nel repo GitHub:
+# Secret necessari (configurati per environment in GitHub):
 #   • DEPLOY_HOSTS    — IP pubblici dei nodi app separati da virgola (es. 1.2.3.4,5.6.7.8)
 #                       Ottenibili con: terraform output app_node_ips
 #   • DEPLOY_USER     — utente SSH (root per Droplet DigitalOcean di default)
@@ -16,6 +17,8 @@ name: CI/CD
 on:
   push:
     branches: [main, master]
+    tags:
+      - "stage-*"
   pull_request:
     branches: [main, master]
 
@@ -39,10 +42,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -61,9 +64,9 @@ jobs:
         run: mypy app/
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       - name: Install Node dependencies
@@ -86,10 +89,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -123,42 +126,44 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Imposta QEMU per build multi-arch (arm64 + amd64)
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       # Buildx: il builder avanzato di Docker (multi-arch, cache, ecc.)
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Login su GitHub Container Registry
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }} # token automatico, nessun secret manuale
 
       # Genera tag e labels automatici:
-      #   • :latest   su ogni push a main
-      #   • :sha-XXXXX  (primo commit SHA)
-      #   • :v1.2.3   se esiste un tag Git
+      #   • :latest      su ogni push a main
+      #   • :sha-XXXXX   sempre (primo commit SHA)
+      #   • :v1.2.3      se esiste un tag Git semver
+      #   • :stage-*     se esiste un tag Git con prefisso stage-
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag
 
       # Build multi-arch e push su GHCR
       # Il cache da/verso GHCR evita di ricompilare layer non modificati
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -169,23 +174,235 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
 
   # ────────────────────────────────────────────────────────────────────────────
-  # JOB 4 — deploy su tutti i nodi app via SSH
-  # Gira solo dopo build-push riuscito.
-  # DEPLOY_HOSTS: IP pubblici dei nodi (comma-separated).
-  # appleboy/ssh-action li esegue in parallelo su tutti gli host.
+  # JOB 4a — deploy staging
+  # Gira solo quando viene pushato un tag "stage-*" (da qualsiasi branch).
+  # Usa l'environment "staging" → DEPLOY_HOSTS punta ai nodi di staging.
+  # L'immagine viene identificata dal nome del tag (es. stage-20260430).
   # ────────────────────────────────────────────────────────────────────────────
-  deploy:
-    name: Deploy to Production
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build-push
-    environment: production # richiede approvazione manuale se configurato
+    if: startsWith(github.ref, 'refs/tags/stage-')
+    environment: staging
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # Copia i file compose su tutti i nodi prima del deploy.
-      # Garantisce che ~/docker-todo/ contenga sempre la versione corrente.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
+      # ensure target dir). MUST run before SCP — otherwise SCP can race
+      # against cloud-init still creating /root/docker-todo.
+      - name: Prepare staging nodes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            echo "Waiting for cloud-init to complete..."
+            cloud-init status --wait || echo "cloud-init reported errors, continuing"
+
+            # Always ensure packages — apt is idempotent if already installed
+            apt-get update -qq
+            apt-get install -y docker.io docker-compose-v2 nfs-common
+            systemctl enable --now docker
+
+            # Self-heal NFS mount.
+            # If cloud-init didn't write the fstab entry, reconstruct it from
+            # /etc/nfs-server-ip (written by cloud-init) or NFS_SERVER_IP var.
+            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+            if [ -z "$NFS_IP" ]; then
+              echo "❌ No NFS server IP available."
+              echo "Either /etc/nfs-server-ip is missing (broken cloud-init)"
+              echo "or the NFS_SERVER_IP GitHub variable is unset."
+              echo "Run: terraform output -raw db_private_ip"
+              echo "and set it as a 'staging' environment variable in GitHub."
+              exit 1
+            fi
+            mkdir -p /mnt/todo-data
+            if ! grep -q '/mnt/todo-data' /etc/fstab; then
+              echo "Reconstructing fstab entry: NFS server $NFS_IP"
+              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+            fi
+
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "/mnt/todo-data not mounted, retrying..."
+              for i in $(seq 1 12); do
+                mount /mnt/todo-data 2>/dev/null && break
+                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
+                sleep 10
+              done
+            fi
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "❌ NFS mount failed after 2 min — aborting"
+              echo "--- fstab ---"
+              cat /etc/fstab
+              echo "--- port 2049 reachable? ---"
+              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
+              echo "--- showmount ---"
+              showmount -e "$NFS_IP" 2>&1 || true
+              echo "--- mount error ---"
+              mount /mnt/todo-data 2>&1 || true
+              exit 1
+            fi
+            # Container appuser writes /data/todos.db; permissive perms on
+            # the NFS mount let the non-root UID write to the share
+            chmod 777 /mnt/todo-data
+
+            mkdir -p /root/docker-todo
+
+      - name: Copy compose files to staging nodes
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker-compose.yml,docker-compose.prod.yml"
+          target: "/root/docker-todo"
+          overwrite: true
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+            cd /root/docker-todo
+
+            # Sanity check: both compose files must be present and non-empty
+            for f in docker-compose.yml docker-compose.prod.yml; do
+              [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
+            done
+
+            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+
+            # Export so every subsequent docker compose call sees them
+            export IMAGE_TAG=${{ github.ref_name }}
+            export GITHUB_REPOSITORY=${{ github.repository }}
+
+            docker pull ghcr.io/${{ github.repository }}/docker-todo:${{ github.ref_name }}
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              up -d --no-build
+            docker image prune -f
+            sleep 5
+            # Pass the same -f flags here too: without them compose ps would
+            # auto-discover only docker-compose.yml (base) and miss the prod
+            # override that carries the image: key
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              ps
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            # Retry for 90s: gunicorn workers + container healthcheck
+            # start_period mean the app may not respond on the first try
+            for i in $(seq 1 18); do
+              if curl --fail --silent http://localhost:5001/healthz > /dev/null; then
+                echo "✅ Staging deploy OK (attempt $i)"
+                exit 0
+              fi
+              echo "  attempt $i/18: not ready yet, sleeping 5s..."
+              sleep 5
+            done
+
+            # Failed — dump diagnostics so we can see what's wrong
+            echo "❌ Healthcheck failed after 90s"
+            echo "--- docker ps ---"
+            docker ps -a
+            echo "--- container logs ---"
+            docker logs docker-todo-prod --tail 100 2>&1 || true
+            echo "--- mount ---"
+            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
+            exit 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 4b — deploy production
+  # Gira solo su push a main/master, dopo build-push riuscito.
+  # DEPLOY_HOSTS: IP pubblici dei nodi (comma-separated).
+  # appleboy/ssh-action li esegue in parallelo su tutti gli host.
+  # ────────────────────────────────────────────────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
+      # ensure target dir). Must run before SCP to avoid race.
+      - name: Prepare production nodes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOSTS }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            echo "Waiting for cloud-init to complete..."
+            cloud-init status --wait || echo "cloud-init reported errors, continuing"
+
+            # Always ensure packages — apt is idempotent if already installed
+            apt-get update -qq
+            apt-get install -y docker.io docker-compose-v2 nfs-common
+            systemctl enable --now docker
+
+            # Self-heal NFS mount (see staging deploy comment for details)
+            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+            if [ -z "$NFS_IP" ]; then
+              echo "❌ No NFS server IP available. Set NFS_SERVER_IP in GitHub vars."
+              exit 1
+            fi
+            mkdir -p /mnt/todo-data
+            if ! grep -q '/mnt/todo-data' /etc/fstab; then
+              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+            fi
+            if ! mountpoint -q /mnt/todo-data; then
+              for i in $(seq 1 12); do
+                mount /mnt/todo-data 2>/dev/null && break
+                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
+                sleep 10
+              done
+            fi
+            if ! mountpoint -q /mnt/todo-data; then
+              echo "❌ NFS mount failed after 2 min — aborting"
+              echo "--- fstab ---"
+              cat /etc/fstab
+              echo "--- port 2049 reachable? ---"
+              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
+              echo "--- showmount ---"
+              showmount -e "$NFS_IP" 2>&1 || true
+              echo "--- mount error ---"
+              mount /mnt/todo-data 2>&1 || true
+              exit 1
+            fi
+            chmod 777 /mnt/todo-data
+
+            mkdir -p /root/docker-todo
+
       - name: Copy compose files to production nodes
         uses: appleboy/scp-action@v1
         with:
@@ -202,33 +419,38 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
           script: |
             set -e
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-            # Vai nella directory del progetto sul server
             cd /root/docker-todo
 
+            # Sanity check: both compose files must be present and non-empty
+            for f in docker-compose.yml docker-compose.prod.yml; do
+              [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
+            done
+
             # Carica REDIS_URL dal file scritto dal cloud-init (Valkey URI)
-            # Il file e' 600 (solo root) e non entra mai in git o nell'immagine
             [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
 
-            # Scarica l'immagine aggiornata dal registry
-            docker pull ghcr.io/${{ github.repository }}/docker-todo:latest
+            # Export so every subsequent docker compose call sees them
+            export IMAGE_TAG=latest
+            export GITHUB_REPOSITORY=${{ github.repository }}
 
-            # Riavvia con zero downtime (rolling update)
-            IMAGE_TAG=latest \
-            GITHUB_REPOSITORY=${{ github.repository }} \
+            docker pull ghcr.io/${{ github.repository }}/docker-todo:latest
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
               up -d --no-build
 
-            # Rimuovi immagini vecchie (dangling) per liberare spazio
             docker image prune -f
-
-            # Verifica che il container sia healthy
             sleep 5
-            docker compose ps
+            # Pass the same -f flags here too (see staging deploy comment)
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1
@@ -236,8 +458,24 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
           script: |
-            # Porta 5001: mappatura host del container (5001:5000)
-            curl --fail --silent http://localhost:5001/healthz \
-              && echo "✅ Deploy OK" \
-              || (echo "❌ Healthcheck fallito!" && exit 1)
+            # Retry for 90s: gunicorn workers + container healthcheck
+            # start_period mean the app may not respond on the first try
+            for i in $(seq 1 18); do
+              if curl --fail --silent http://localhost:5001/healthz > /dev/null; then
+                echo "✅ Production deploy OK (attempt $i)"
+                exit 0
+              fi
+              echo "  attempt $i/18: not ready yet, sleeping 5s..."
+              sleep 5
+            done
+
+            echo "❌ Healthcheck failed after 90s"
+            echo "--- docker ps ---"
+            docker ps -a
+            echo "--- container logs ---"
+            docker logs docker-todo-prod --tail 100 2>&1 || true
+            echo "--- mount ---"
+            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
+            exit 1
