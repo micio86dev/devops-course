@@ -206,34 +206,25 @@ jobs:
             echo "Waiting for cloud-init to complete..."
             cloud-init status --wait || echo "cloud-init reported errors, continuing"
 
-            if ! command -v docker &>/dev/null; then
-              echo "Docker not found, installing via apt..."
-              apt-get update -qq
-              apt-get install -y docker.io docker-compose-v2
-              systemctl enable --now docker
-            fi
-
-            # Ensure NFS client tools are present (old droplets may lack nfs-common)
-            if ! dpkg -l nfs-common &>/dev/null; then
-              echo "nfs-common not found, installing..."
-              apt-get update -qq
-              apt-get install -y nfs-common
-            fi
+            # Always ensure packages — apt is idempotent if already installed
+            apt-get update -qq
+            apt-get install -y docker.io docker-compose-v2 nfs-common
+            systemctl enable --now docker
 
             # Self-heal NFS mount.
             # If cloud-init didn't write the fstab entry, reconstruct it from
             # /etc/nfs-server-ip (written by cloud-init) or NFS_SERVER_IP var.
+            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+            if [ -z "$NFS_IP" ]; then
+              echo "❌ No NFS server IP available."
+              echo "Either /etc/nfs-server-ip is missing (broken cloud-init)"
+              echo "or the NFS_SERVER_IP GitHub variable is unset."
+              echo "Run: terraform output -raw db_private_ip"
+              echo "and set it as a 'staging' environment variable in GitHub."
+              exit 1
+            fi
             mkdir -p /mnt/todo-data
             if ! grep -q '/mnt/todo-data' /etc/fstab; then
-              NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
-              if [ -z "$NFS_IP" ]; then
-                echo "❌ No NFS server IP available."
-                echo "Either /etc/nfs-server-ip is missing (broken cloud-init)"
-                echo "or the NFS_SERVER_IP GitHub variable is unset."
-                echo "Run: terraform output -raw db_private_ip"
-                echo "and set it as a 'staging' environment variable in GitHub."
-                exit 1
-              fi
               echo "Reconstructing fstab entry: NFS server $NFS_IP"
               echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
             fi
@@ -248,9 +239,13 @@ jobs:
             fi
             if ! mountpoint -q /mnt/todo-data; then
               echo "❌ NFS mount failed after 2 min — aborting"
-              echo "--- /etc/fstab ---"
+              echo "--- fstab ---"
               cat /etc/fstab
-              echo "--- mount attempt error ---"
+              echo "--- port 2049 reachable? ---"
+              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
+              echo "--- showmount ---"
+              showmount -e "$NFS_IP" 2>&1 || true
+              echo "--- mount error ---"
               mount /mnt/todo-data 2>&1 || true
               exit 1
             fi
@@ -370,28 +365,19 @@ jobs:
             echo "Waiting for cloud-init to complete..."
             cloud-init status --wait || echo "cloud-init reported errors, continuing"
 
-            if ! command -v docker &>/dev/null; then
-              echo "Docker not found, installing via apt..."
-              apt-get update -qq
-              apt-get install -y docker.io docker-compose-v2
-              systemctl enable --now docker
-            fi
-
-            # Ensure NFS client tools are present (old droplets may lack nfs-common)
-            if ! dpkg -l nfs-common &>/dev/null; then
-              echo "nfs-common not found, installing..."
-              apt-get update -qq
-              apt-get install -y nfs-common
-            fi
+            # Always ensure packages — apt is idempotent if already installed
+            apt-get update -qq
+            apt-get install -y docker.io docker-compose-v2 nfs-common
+            systemctl enable --now docker
 
             # Self-heal NFS mount (see staging deploy comment for details)
+            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
+            if [ -z "$NFS_IP" ]; then
+              echo "❌ No NFS server IP available. Set NFS_SERVER_IP in GitHub vars."
+              exit 1
+            fi
             mkdir -p /mnt/todo-data
             if ! grep -q '/mnt/todo-data' /etc/fstab; then
-              NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
-              if [ -z "$NFS_IP" ]; then
-                echo "❌ No NFS server IP available. Set NFS_SERVER_IP in GitHub vars."
-                exit 1
-              fi
               echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
             fi
             if ! mountpoint -q /mnt/todo-data; then
@@ -403,7 +389,13 @@ jobs:
             fi
             if ! mountpoint -q /mnt/todo-data; then
               echo "❌ NFS mount failed after 2 min — aborting"
+              echo "--- fstab ---"
               cat /etc/fstab
+              echo "--- port 2049 reachable? ---"
+              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
+              echo "--- showmount ---"
+              showmount -e "$NFS_IP" 2>&1 || true
+              echo "--- mount error ---"
               mount /mnt/todo-data 2>&1 || true
               exit 1
             fi
