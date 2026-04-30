@@ -270,10 +270,28 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
           script: |
-            curl --fail --silent http://localhost:5001/healthz \
-              && echo "✅ Staging deploy OK" \
-              || (echo "❌ Healthcheck fallito!" && exit 1)
+            # Retry for 90s: gunicorn workers + container healthcheck
+            # start_period mean the app may not respond on the first try
+            for i in $(seq 1 18); do
+              if curl --fail --silent http://localhost:5001/healthz > /dev/null; then
+                echo "✅ Staging deploy OK (attempt $i)"
+                exit 0
+              fi
+              echo "  attempt $i/18: not ready yet, sleeping 5s..."
+              sleep 5
+            done
+
+            # Failed — dump diagnostics so we can see what's wrong
+            echo "❌ Healthcheck failed after 90s"
+            echo "--- docker ps ---"
+            docker ps -a
+            echo "--- container logs ---"
+            docker logs docker-todo-prod --tail 100 2>&1 || true
+            echo "--- mount ---"
+            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
+            exit 1
 
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 4b — deploy production
@@ -369,8 +387,24 @@ jobs:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
           script: |
-            # Porta 5001: mappatura host del container (5001:5000)
-            curl --fail --silent http://localhost:5001/healthz \
-              && echo "✅ Production deploy OK" \
-              || (echo "❌ Healthcheck fallito!" && exit 1)
+            # Retry for 90s: gunicorn workers + container healthcheck
+            # start_period mean the app may not respond on the first try
+            for i in $(seq 1 18); do
+              if curl --fail --silent http://localhost:5001/healthz > /dev/null; then
+                echo "✅ Production deploy OK (attempt $i)"
+                exit 0
+              fi
+              echo "  attempt $i/18: not ready yet, sleeping 5s..."
+              sleep 5
+            done
+
+            echo "❌ Healthcheck failed after 90s"
+            echo "--- docker ps ---"
+            docker ps -a
+            echo "--- container logs ---"
+            docker logs docker-todo-prod --tail 100 2>&1 || true
+            echo "--- mount ---"
+            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
+            exit 1
