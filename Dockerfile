@@ -29,23 +29,31 @@ FROM python:3.12-slim AS runtime
 RUN groupadd --system appgroup \
     && useradd  --system --gid appgroup appuser
 
-WORKDIR /app
+# WORKDIR /srv: l'app vive in /srv/app/ come PACKAGE Python.
+# Il file app.py contiene `from app.db import ...`, quindi `app` deve essere
+# un package importabile (cartella con __init__.py), non un modulo top-level.
+# Con WORKDIR=/srv e codice in /srv/app/, gunicorn risolve `app.app:app`
+# come "package app -> modulo app -> oggetto app" e gli import interni
+# `from app.db import ...` funzionano correttamente.
+WORKDIR /srv
 
 # Copia il venv già compilato dallo stage builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Copia il codice applicativo (già di proprietà di appuser → no PermissionError)
-COPY --chown=appuser:appgroup app/ .
+# Copia il codice applicativo come SOTTOdirectory (preserva il package layout)
+COPY --chown=appuser:appgroup app/ ./app/
 
 # Aggiungi il venv al PATH.
 # DB_SSL_CA punta al path *dentro al container* dove docker-compose.prod.yml
 # monta in read-only il certificato CA del Managed MySQL. Per dev locale
 # (mysql:8 senza TLS) il file non esiste e l'app cade in fallback no-TLS.
+# FLASK_APP=app.app: punta al modulo `app` dentro al package `app` (per
+# `flask run` in dev — gunicorn usa la CMD esplicita sotto).
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem \
-    FLASK_APP=app.py
+    FLASK_APP=app.app
 
 # Porta esposta (documentativa — non fa il publish di per sé)
 EXPOSE 5000
@@ -56,14 +64,16 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"
 
-# Entrypoint: gunicorn in produzione (non il dev server Flask)
+# Entrypoint: gunicorn in produzione (non il dev server Flask).
+# `app.app:app` significa: package `app` -> modulo `app.py` -> oggetto `app`
+# (l'istanza Flask creata in app/app.py).
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
      "--workers", "2", \
      "--timeout", "30", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
-     "app:app"]
+     "app.app:app"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STAGE 3 — dev

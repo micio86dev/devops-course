@@ -21,7 +21,7 @@ services:
       # (il file /etc/mysql-ca/mysql-ca.pem non esiste in dev).
       DB_SSL_CA: ""
     volumes:
-      - ./app:/app # bind mount: hot reload del codice senza rebuild
+      - ./app:/srv/app # bind mount: hot reload del codice senza rebuild
     depends_on:
       mysql:
         condition: service_healthy
