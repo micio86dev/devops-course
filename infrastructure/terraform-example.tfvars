@@ -12,3 +12,25 @@ ssh_public_key = "ssh-ed25519 AAAA... utente@macbook"
 # Riferimento completo all'immagine: registry/utente/nome:tag
 # "latest" è ok per la lezione, in produzione meglio un tag versionato (v1.0.0)
 docker_image = "utente/todo-app:latest"
+
+# ============================================================================
+# Variabili per il nodo monitoring (aggiungere in terraform.tfvars)
+# ============================================================================
+
+# Path alla chiave SSH privata (per remote-exec su nodi app).
+# Default: ~/.ssh/id_ed25519 — da sovrascrivere solo se usi un path diverso.
+# ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# Password admin di Grafana — scegliere una password sicura
+grafana_password = "una-password-sicura"
+
+# DSN per mysqld_exporter. Valori da: terraform output -raw mysql_password
+# e terraform output -raw mysql_private_host
+mysql_exporter_dsn   = "todoapp:$(terraform output -raw mysql_password)@tcp($(terraform output -raw mysql_private_host):25060)/"
+
+# URI Valkey per redis_exporter. Valore da: terraform output cache_uri
+valkey_exporter_uri  = "$(terraform output cache_uri)"
+
+# Webhook Slack (lasciare vuoto per disabilitare le notifiche)
+# alertmanager_slack_url     = ""
+# alertmanager_slack_channel = "#alerts"

@@ -22,16 +22,6 @@ output "app_node_ips" {
   value = digitalocean_droplet.app[*].ipv4_address
 }
 
-output "db_node_ip" {
-  description = "IP pubblico del nodo DB self-managed (per SSH di debug)"
-  value       = digitalocean_droplet.db.ipv4_address
-}
-
-output "db_private_ip" {
-  description = "IP privato (VPC) del nodo DB. Usato dagli app node per montare NFS."
-  value       = digitalocean_droplet.db.ipv4_address_private
-}
-
 # CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
 # niente piu' cache_node_ip (la Droplet non esiste piu').
 # Al suo posto: hostname privato del cluster Valkey + URI sensibile.
@@ -96,4 +86,23 @@ output "mysql_ca_certificate" {
 output "project_name" {
   description = "Conferma del Project DO dove sono andate le resource"
   value       = data.digitalocean_project.course.name
+}
+
+# ============================================================================
+# Output del nodo monitoring
+# ============================================================================
+
+output "monitoring_node_public_ip" {
+  description = "IP pubblico del nodo monitoring (per SSH di debug)"
+  value       = digitalocean_droplet.monitoring.ipv4_address
+}
+
+output "monitoring_node_private_ip" {
+  description = "IP privato (VPC) del nodo monitoring"
+  value       = digitalocean_droplet.monitoring.ipv4_address_private
+}
+
+output "grafana_url" {
+  description = "URL Grafana (nginx sul nodo monitoring)"
+  value       = "http://${digitalocean_droplet.monitoring.ipv4_address}"
 }
