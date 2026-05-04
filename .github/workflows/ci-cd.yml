@@ -360,6 +360,20 @@ jobs:
             # in .env.mysql per essere espliciti sul path che il container vede.
             export DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem
 
+            # Fail-fast: se DB_HOST e' ancora vuoto qui, ne' .env.mysql ne'
+            # i secret hanno fornito la connection string. Senza questo check
+            # il container parte, fallback a `mysql` (default del compose),
+            # e sprechiamo 90s di healthcheck retry per scoprirlo.
+            if [ -z "${DB_HOST:-}" ]; then
+              echo "ERROR: DB_HOST is empty after sourcing .env.mysql and applying secrets."
+              echo "  - .env.mysql exists?  $([ -f .env.mysql ] && echo yes || echo NO)"
+              echo "  - mysql-ca.pem exists? $([ -f mysql-ca.pem ] && echo yes || echo NO)"
+              echo "Set the GH secrets DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD/DB_SSL_CA"
+              echo "for this environment, or recycle the app droplets so cloud-init writes"
+              echo ".env.mysql. See docs/MYSQL_MIGRATION.md section 6."
+              exit 1
+            fi
+
             # Export per gli step successivi di docker compose
             export IMAGE_TAG=${{ github.ref_name }}
             export GITHUB_REPOSITORY=${{ github.repository }}
