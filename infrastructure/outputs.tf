@@ -86,8 +86,8 @@ output "mysql_database" {
 output "mysql_ca_certificate" {
   description = "Certificato CA del cluster in PEM. Da base64-encodare (terraform output -raw mysql_ca_certificate | base64) per il secret DB_SSL_CA."
   # Il CA cert vive su un data source dedicato (non sul cluster stesso).
-  # L'attributo .certificate e' base64; lo decodifichiamo per esporre PEM.
-  value = base64decode(data.digitalocean_database_ca.mysql.certificate)
+  # L'attributo .certificate ora è già PEM, niente decode.
+  value = data.digitalocean_database_ca.mysql.certificate
   # sensitive: tecnicamente e' pubblico (e' un CA cert), ma marcandolo
   # sensitive evitiamo che finisca nei log di terraform plan/apply.
   sensitive = true

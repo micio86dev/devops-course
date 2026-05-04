@@ -42,7 +42,7 @@ resource "digitalocean_droplet" "app" {
     mysql_database       = digitalocean_database_db.app.name
     mysql_user           = digitalocean_database_user.app.name
     mysql_password       = digitalocean_database_user.app.password
-    mysql_ca_certificate = base64decode(data.digitalocean_database_ca.mysql.certificate)
+    mysql_ca_certificate = data.digitalocean_database_ca.mysql.certificate
 
     # Passa anche le porte al template (per docker run -p)
     host_port      = var.host_port
