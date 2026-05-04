@@ -9,5 +9,6 @@ pytest-playwright
 # linting + type checking
 ruff
 mypy
+types-PyMySQL  # used by scripts/sqlite_to_mysql.py
 
 # After installing, run: playwright install chromium

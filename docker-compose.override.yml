@@ -10,18 +10,45 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime
+      target: dev
     image: docker-todo:dev
     container_name: docker-todo-dev
     ports:
       - "5001:5000"
     environment:
       FLASK_DEBUG: "1"
+      # Override del default DB_SSL_CA del Dockerfile: locale = no TLS
+      # (il file /etc/mysql-ca/mysql-ca.pem non esiste in dev).
+      DB_SSL_CA: ""
     volumes:
-      - ./app:/app # bind mount: hot reload del codice senza rebuild
-      - todo-data:/data # volume named: SQLite persiste tra restart
-
+      - ./app:/srv/app # bind mount: hot reload del codice senza rebuild
+    depends_on:
+      mysql:
+        condition: service_healthy
     command: flask run --host=0.0.0.0 --port=5000
 
+  # MySQL 8 locale per dev e test. In CI il job test usa un service container
+  # equivalente; in produzione l'app si collega al cluster Managed MySQL.
+  # Su MySQL 8.4 caching_sha2_password e' il default e --default-authentication-plugin
+  # e' stato rimosso, quindi lasciamo che il container usi i default.
+  mysql:
+    image: mysql:8
+    container_name: docker-todo-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: todos
+      MYSQL_USER: todoapp
+      MYSQL_PASSWORD: todopw
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - mysql-data:/var/lib/mysql
+
 volumes:
-  todo-data:
+  mysql-data:

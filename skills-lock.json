@@ -76,6 +76,12 @@
       "sourceType": "github",
       "computedHash": "ec9792f5fd065e020c48ab5a57707c83435c286c449ba98dfa726d7b1842c868"
     },
+    "slo-implementation": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/slo-implementation/SKILL.md",
+      "computedHash": "42401f6f1039dcf20db7c872135632ed7725a4dbdfa840e03d72c51eae7ae0b1"
+    },
     "systematic-debugging": {
       "source": "obra/superpowers",
       "sourceType": "github",
