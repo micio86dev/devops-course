@@ -1,5 +1,5 @@
 #cloud-config
-# Nodo monitoring: Prometheus · Grafana · Loki · Alertmanager
+# Nodo monitoring: Prometheus * Grafana * Loki * Alertmanager
 # Tutti i config file vengono scritti da cloud-init al primo boot.
 # I valori delle variabili ($${...}) vengono iniettati da Terraform templatefile().
 package_update: true
@@ -17,7 +17,7 @@ bootcmd:
   - mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 
 write_files:
-  # ── .env (segreti, mode 600) ──────────────────────────────────────────────
+  # -- .env (segreti, mode 600) ----------------------------------------------
   - path: /opt/monitoring/.env
     permissions: "0600"
     owner: root:root
@@ -28,7 +28,7 @@ write_files:
       ALERTMANAGER_SLACK_URL=${alertmanager_slack_url}
       ALERTMANAGER_SLACK_CHANNEL=${alertmanager_slack_channel}
 
-  # ── docker-compose.yml ───────────────────────────────────────────────────
+  # -- docker-compose.yml ---------------------------------------------------
   - path: /opt/monitoring/docker-compose.yml
     content: |
       services:
@@ -95,7 +95,7 @@ write_files:
         loki_data:
         grafana_data:
 
-  # ── prometheus/prometheus.yml ─────────────────────────────────────────────
+  # -- prometheus/prometheus.yml ---------------------------------------------
   - path: /opt/monitoring/prometheus/prometheus.yml
     content: |
       global:
@@ -164,7 +164,7 @@ write_files:
             - target_label: __address__
               replacement: blackbox:9115
 
-  # ── prometheus/rules/infrastructure.yml ───────────────────────────────────
+  # -- prometheus/rules/infrastructure.yml -----------------------------------
   - path: /opt/monitoring/prometheus/rules/infrastructure.yml
     content: |
       groups:
@@ -284,7 +284,7 @@ write_files:
               annotations:
                 summary: "MySQL connections above 80% of max"
 
-  # ── prometheus/rules/application.yml ──────────────────────────────────────
+  # -- prometheus/rules/application.yml --------------------------------------
   - path: /opt/monitoring/prometheus/rules/application.yml
     content: |
       groups:
@@ -299,7 +299,7 @@ write_files:
             #   annotations:
             #     summary: 'High 5xx rate on {{ $labels.node }}'
 
-  # ── loki/loki-config.yml ──────────────────────────────────────────────────
+  # -- loki/loki-config.yml --------------------------------------------------
   - path: /opt/monitoring/loki/loki-config.yml
     content: |
       auth_enabled: false
@@ -339,7 +339,7 @@ write_files:
         delete_request_store: filesystem
         compaction_interval: 10m
 
-  # ── alertmanager/alertmanager.yml ─────────────────────────────────────────
+  # -- alertmanager/alertmanager.yml -----------------------------------------
   - path: /opt/monitoring/alertmanager/alertmanager.yml
     content: |
       global:
@@ -378,7 +378,7 @@ write_files:
             severity: warning
           equal: ['node']
 
-  # ── grafana/provisioning/datasources/datasources.yml ──────────────────────
+  # -- grafana/provisioning/datasources/datasources.yml ----------------------
   - path: /opt/monitoring/grafana/provisioning/datasources/datasources.yml
     content: |
       apiVersion: 1
@@ -394,7 +394,7 @@ write_files:
           url: http://loki:3100
           editable: false
 
-  # ── grafana/provisioning/dashboards/dashboards.yml ────────────────────────
+  # -- grafana/provisioning/dashboards/dashboards.yml ------------------------
   - path: /opt/monitoring/grafana/provisioning/dashboards/dashboards.yml
     content: |
       apiVersion: 1
@@ -406,7 +406,7 @@ write_files:
           options:
             path: /etc/grafana/provisioning/dashboards
 
-  # ── nginx: proxy HTTP → Grafana ───────────────────────────────────────────
+  # -- nginx: proxy HTTP → Grafana -------------------------------------------
   - path: /etc/nginx/sites-available/grafana
     content: |
       server {
