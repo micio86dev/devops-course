@@ -15,6 +15,7 @@ bootcmd:
   - mkdir -p /opt/monitoring/alertmanager
   - mkdir -p /opt/monitoring/grafana/provisioning/datasources
   - mkdir -p /opt/monitoring/grafana/provisioning/dashboards
+  - mkdir -p /opt/monitoring/mysqld_exporter
 
 write_files:
   # -- .env (segreti, mode 600) ----------------------------------------------
