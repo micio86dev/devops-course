@@ -31,11 +31,15 @@ resource "null_resource" "node_agent" {
     type        = "ssh"
     host        = each.value.public_ip
     user        = "root"
-    private_key = var.ssh_private_key
+    private_key = file(pathexpand(var.ssh_private_key_path))
   }
 
   provisioner "remote-exec" {
-    inline = ["mkdir -p /root/monitoring"]
+    inline = [
+      # Aspetta che cloud-init finisca (installa Docker — può richiedere 2-4 min)
+      "cloud-init status --wait || true",
+      "mkdir -p /root/monitoring",
+    ]
   }
 
   provisioner "file" {
@@ -53,7 +57,10 @@ resource "null_resource" "node_agent" {
 
   provisioner "remote-exec" {
     inline = [
-      "cd /root/monitoring && docker compose -f docker-compose.agents.yml up -d"
+      # Installa Docker se cloud-init non l'ha fatto (idempotente)
+      "command -v docker >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker)",
+      "systemctl is-active --quiet docker || systemctl start docker",
+      "cd /root/monitoring && docker compose -f docker-compose.agents.yml up -d",
     ]
   }
 

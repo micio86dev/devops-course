@@ -17,10 +17,9 @@ docker_image = "utente/todo-app:latest"
 # Variabili per il nodo monitoring (aggiungere in terraform.tfvars)
 # ============================================================================
 
-# Contenuto della chiave PRIVATA (per remote-exec su nodi app).
-# Per ottenerla: cat ~/.ssh/id_ed25519
-# ATTENZIONE: mantenere i newline letterali nella stringa!
-ssh_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\n..."  # cat ~/.ssh/id_ed25519
+# Path alla chiave SSH privata (per remote-exec su nodi app).
+# Default: ~/.ssh/id_ed25519 — da sovrascrivere solo se usi un path diverso.
+# ssh_private_key_path = "~/.ssh/id_ed25519"
 
 # Password admin di Grafana — scegliere una password sicura
 grafana_password = "una-password-sicura"

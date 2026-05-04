@@ -142,10 +142,10 @@ variable "name_prefix" {
 # Variabili per il nodo monitoring
 # ============================================================================
 
-variable "ssh_private_key" {
-  description = "Contenuto della chiave SSH privata (per remote-exec provisioner sui nodi app)"
+variable "ssh_private_key_path" {
+  description = "Path alla chiave SSH privata (per remote-exec provisioner sui nodi app)"
   type        = string
-  sensitive   = true
+  default     = "~/.ssh/id_ed25519"
 }
 
 variable "monitoring_droplet_size" {
