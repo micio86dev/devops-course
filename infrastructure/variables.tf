@@ -160,12 +160,6 @@ variable "grafana_password" {
   sensitive   = true
 }
 
-variable "mysql_exporter_dsn" {
-  description = "DSN per mysqld_exporter: user:pass@tcp(host:25060)/"
-  type        = string
-  sensitive   = true
-}
-
 variable "valkey_exporter_uri" {
   description = "URI Valkey per redis_exporter: rediss://default:pass@host:25061"
   type        = string

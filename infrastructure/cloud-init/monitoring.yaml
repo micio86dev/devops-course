@@ -23,10 +23,21 @@ write_files:
     owner: root:root
     content: |
       GRAFANA_PASSWORD=${grafana_password}
-      MYSQL_EXPORTER_DSN=${mysql_exporter_dsn}
       VALKEY_EXPORTER_URI=${valkey_exporter_uri}
       ALERTMANAGER_SLACK_URL=${alertmanager_slack_url}
       ALERTMANAGER_SLACK_CHANNEL=${alertmanager_slack_channel}
+
+  # -- mysqld_exporter .my.cnf (mode 644 so nobody user inside container can read)
+  - path: /opt/monitoring/mysqld_exporter/.my.cnf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [client]
+      user=${mysql_exporter_user}
+      password=${mysql_exporter_password}
+      host=${mysql_exporter_host}
+      port=${mysql_exporter_port}
+      ssl-mode=REQUIRED
 
   # -- docker-compose.yml ---------------------------------------------------
   - path: /opt/monitoring/docker-compose.yml
@@ -68,8 +79,9 @@ write_files:
 
         mysqld_exporter:
           image: prom/mysqld-exporter:latest
-          environment:
-            - DATA_SOURCE_NAME=$MYSQL_EXPORTER_DSN
+          volumes:
+            - ./mysqld_exporter/.my.cnf:/home/.my.cnf:ro
+          command: ["--config.my-cnf=/home/.my.cnf"]
           restart: unless-stopped
 
         redis_exporter:
