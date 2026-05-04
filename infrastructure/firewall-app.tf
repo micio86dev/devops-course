@@ -3,7 +3,7 @@
 # Firewall per i 2 nodi app:
 # - SSH (22) dall'esterno per debug
 # - HTTP (5001) SOLO dal Load Balancer
-# - Outbound aperto (per docker pull, NFS, Redis)
+# - Outbound aperto (per docker pull, MySQL, Valkey)
 # ============================================================================
 
 resource "digitalocean_firewall" "app" {
@@ -53,7 +53,7 @@ resource "digitalocean_firewall" "app" {
 
   # === REGOLE OUTBOUND (dove possono connettersi DA queste Droplet) ===
 
-  # TCP outbound aperto: serve per docker pull, apt, NFS, Redis, ecc.
+  # TCP outbound aperto: serve per docker pull, apt, MySQL, Valkey, ecc.
   outbound_rule {
     protocol              = "tcp"
     port_range            = "1-65535" # tutte le porte TCP

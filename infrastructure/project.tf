@@ -26,14 +26,10 @@ resource "digitalocean_project_resources" "course" {
     # [*].urn = lista degli URN di tutti gli app nodes
     digitalocean_droplet.app[*].urn,
     [
-      # Droplet DB self-managed (con SQLite + NFS)
-      digitalocean_droplet.db.urn,
-
       # Cluster Valkey managed
       digitalocean_database_cluster.cache.urn,
 
-      # Cluster MySQL managed (sostituira' la Droplet DB self-managed
-      # in un PR di follow-up dopo cutover)
+      # Cluster MySQL managed
       digitalocean_database_cluster.mysql.urn,
 
       digitalocean_loadbalancer.public.urn,

@@ -26,7 +26,7 @@
 | NET-02  | All compute resources (Droplets, LB, Valkey) are attached to this VPC     |
 | NET-03  | Only the Load Balancer has a public IP exposed to the internet (HTTP)     |
 | NET-04  | App Droplets have public IPs for SSH access only                          |
-| NET-05  | DB Droplet has a public IP for SSH access only; no HTTP exposure          |
+| NET-05  | Monitoring Droplet has a public IP for SSH and Grafana (HTTP :80)         |
 
 ---
 
@@ -50,11 +50,11 @@
 | APP-01  | 2 Droplets: `devops-course-app-1`, `devops-course-app-2`                   |
 | APP-02  | Image: `ubuntu-24-04-x64`; size: `s-1vcpu-1gb`; region: same as VPC        |
 | APP-03  | Tags include `devops-course` (required for Valkey firewall rule)           |
-| APP-04  | Docker and Docker Compose plugin installed via `get.docker.com` script     |
-| APP-05  | NFS share mounted at `/mnt/todo-data` (DB node export) on boot             |
-| APP-06  | `/etc/fstab` entry ensures NFS remounts after reboot                       |
-| APP-07  | Directory `/root/docker-todo/` exists after provisioning                   |
-| APP-08  | `/root/docker-todo/.env.valkey` contains `REDIS_URL=rediss://…` (mode 600) |
+| APP-04  | Docker and Docker Compose plugin installed via `apt` (docker.io)           |
+| APP-05  | Directory `/root/docker-todo/` exists after provisioning                   |
+| APP-06  | `/root/docker-todo/.env.valkey` contains `REDIS_URL=rediss://…` (mode 600) |
+| APP-07  | `/root/docker-todo/.env.mysql` contains `DB_*` connection vars (mode 600)  |
+| APP-08  | `/root/docker-todo/mysql-ca.pem` contains MySQL CA certificate (mode 644)  |
 | APP-09  | No application container running at provision time — CI/CD deploys the app |
 
 ### App node firewall
@@ -63,31 +63,12 @@
 | --------- | --------------------------------------------------------------------------------- |
 | FW-APP-01 | Inbound SSH (port 22) allowed from 0.0.0.0/0 (needed for CI/CD deploy)            |
 | FW-APP-02 | Inbound HTTP (port 5001) allowed **only** from the Load Balancer (tag-based rule) |
-| FW-APP-03 | All outbound TCP/UDP allowed (Docker image pulls, NFS, Valkey)                    |
+| FW-APP-03 | All outbound TCP/UDP allowed (Docker image pulls, MySQL, Valkey)                  |
 | FW-APP-04 | No other inbound ports open                                                       |
 
 ---
 
-## 5. DB Node (NFS server)
-
-| Spec ID | Assertion                                                         |
-| ------- | ----------------------------------------------------------------- |
-| DB-01   | 1 Droplet: `devops-course-db`; size `s-1vcpu-1gb`                 |
-| DB-02   | NFS server exports `/srv/todo-data` to `10.10.10.0/24` (VPC only) |
-| DB-03   | Export options: `rw,sync,no_subtree_check,no_root_squash`         |
-| DB-04   | Listening on port 2049 (NFSv3)                                    |
-
-### DB node firewall
-
-| Spec ID  | Assertion                                                          |
-| -------- | ------------------------------------------------------------------ |
-| FW-DB-01 | Inbound SSH (port 22) allowed from 0.0.0.0/0                       |
-| FW-DB-02 | Inbound NFS (port 2049) allowed only from VPC CIDR `10.10.10.0/24` |
-| FW-DB-03 | No HTTP/HTTPS exposure                                             |
-
----
-
-## 6. Managed Valkey Cluster
+## 5. Managed Valkey Cluster
 
 | Spec ID | Assertion                                                                                |
 | ------- | ---------------------------------------------------------------------------------------- |
@@ -103,47 +84,58 @@
 
 ---
 
-## 7. Outputs (post `terraform apply`)
+## 6. Outputs (post `terraform apply`)
 
-| Output             | Description                                                                     |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `load_balancer_ip` | Public IP of the LB — set as `DEPLOY_HOSTS` after removing the LB from the list |
-| `app_url`          | `http://<lb-ip>` — public URL of the application                                |
-| `app_node_ips`     | List of public IPs of app nodes → use as `DEPLOY_HOSTS` in GitHub Secrets       |
-| `db_node_ip`       | Public IP of DB node (for SSH debugging)                                        |
-| `cache_host`       | Private hostname of Valkey (VPC-only)                                           |
-| `cache_uri`        | Full Valkey connection URI (sensitive)                                          |
-| `project_name`     | DigitalOcean project the resources belong to                                    |
+| Output                      | Description                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `load_balancer_ip`          | Public IP of the LB — set as `DEPLOY_HOSTS` after removing the LB from the list |
+| `app_url`                   | `http://<lb-ip>` — public URL of the application                                |
+| `app_node_ips`              | List of public IPs of app nodes → use as `DEPLOY_HOSTS` in GitHub Secrets       |
+| `cache_host`                | Private hostname of Valkey (VPC-only)                                           |
+| `cache_uri`                 | Full Valkey connection URI (sensitive)                                          |
+| `mysql_private_host`        | Private hostname of Managed MySQL (VPC-only)                                    |
+| `mysql_port`                | MySQL port (25060)                                                              |
+| `mysql_user`                | Application user name                                                           |
+| `mysql_password`            | Application user password (sensitive)                                           |
+| `mysql_database`            | Application database name                                                       |
+| `mysql_ca_certificate`      | MySQL CA certificate PEM (sensitive; base64-encode for DB_SSL_CA secret)        |
+| `monitoring_node_public_ip` | Public IP of monitoring node (Grafana, SSH)                                     |
+| `grafana_url`               | `http://<monitoring-ip>` — Grafana UI                                           |
+| `project_name`              | DigitalOcean project the resources belong to                                    |
 
 ---
 
-## 8. Bootstrap Flow (cloud-init sequence on app nodes)
+## 7. Bootstrap Flow (cloud-init sequence on app nodes)
 
 ```
 1. apt update + upgrade
-2. Install: ca-certificates, curl, gnupg, nfs-common, netcat-openbsd
-3. Install Docker via get.docker.com script
-4. Enable and start Docker daemon
-5. mkdir -p /mnt/todo-data
-6. Wait up to 5 min for NFS server port 2049 (nc probe loop, 60 attempts × 5 s)
-7. mount -t nfs <db_private_ip>:/srv/todo-data /mnt/todo-data
-8. Add NFS entry to /etc/fstab (survives reboot)
-9. mkdir -p /root/docker-todo
-10. Write REDIS_URL=<cache_uri> to /root/docker-todo/.env.valkey (mode 600)
+2. Install: ca-certificates, curl, gnupg
+3. Write /root/docker-todo/mysql-ca.pem (MySQL CA cert, mode 644)
+4. Install Docker via apt (docker.io + docker-compose-v2)
+5. Enable and start Docker daemon
+6. mkdir -p /root/docker-todo
+7. Write REDIS_URL=<cache_uri> to /root/docker-todo/.env.valkey (mode 600)
+8. Write DB_* vars to /root/docker-todo/.env.mysql (mode 600)
 ```
 
 At this point the node is **ready to receive a CI/CD deploy**. No app container runs yet.
 
 ---
 
-## 9. First Deploy Prerequisites
+## 8. First Deploy Prerequisites
 
 After `terraform apply` succeeds, before the first CD run:
 
-1. Add GitHub Secrets:
+1. Add GitHub Secrets (environment `staging` / `production`):
    - `DEPLOY_HOSTS` ← `terraform output -json app_node_ips | jq -r 'join(",")'`
    - `DEPLOY_USER` ← `root`
    - `DEPLOY_SSH_KEY` ← contents of your Ed25519 private key
+   - `DB_HOST` ← `terraform output -raw mysql_private_host`
+   - `DB_PORT` ← `terraform output -raw mysql_port`
+   - `DB_NAME` ← `terraform output -raw mysql_database`
+   - `DB_USER` ← `terraform output -raw mysql_user`
+   - `DB_PASSWORD` ← `terraform output -raw mysql_password`
+   - `DB_SSL_CA` ← `terraform output -raw mysql_ca_certificate | base64`
 
 2. Push to `main` → GitHub Actions runs lint → test → build-push → deploy
 
@@ -151,12 +143,13 @@ After `terraform apply` succeeds, before the first CD run:
 
 ---
 
-## 10. Cost Estimate (fra1, April 2026)
+## 9. Cost Estimate (fra1, May 2026)
 
-| Resource                      | Monthly cost   |
-| ----------------------------- | -------------- |
-| 2 × App Droplet s-1vcpu-1gb   | ~$12           |
-| 1 × DB Droplet s-1vcpu-1gb    | ~$6            |
-| Load Balancer                 | ~$12           |
-| Managed Valkey db-s-1vcpu-1gb | ~$15           |
-| **Total**                     | **~$45/month** |
+| Resource                           | Monthly cost   |
+| ---------------------------------- | -------------- |
+| 2 × App Droplet s-1vcpu-1gb        | ~$12           |
+| 1 × Monitoring Droplet s-1vcpu-2gb | ~$12           |
+| Load Balancer                      | ~$12           |
+| Managed Valkey db-s-1vcpu-1gb      | ~$15           |
+| Managed MySQL db-s-1vcpu-1gb       | ~$15           |
+| **Total**                          | **~$66/month** |

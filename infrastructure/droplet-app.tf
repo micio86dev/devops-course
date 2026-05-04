@@ -24,9 +24,6 @@ resource "digitalocean_droplet" "app" {
     docker_image   = var.docker_image
     container_name = var.container_name
 
-    # ipv4_address_private: IP della Droplet sulla VPC (NON quello pubblico!)
-    db_private_ip = digitalocean_droplet.db.ipv4_address_private
-
     # CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
     # niente piu' cache_private_ip (la Droplet non esiste piu').
     # Al suo posto: la connection URI privata del cluster Valkey managed.
@@ -56,7 +53,6 @@ resource "digitalocean_droplet" "app" {
   # depends_on: forza ordine di creazione esplicito.
   # Terraform di solito lo deduce dai riferimenti, qui lo rendiamo esplicito.
   depends_on = [
-    digitalocean_droplet.db,
     digitalocean_database_cluster.cache,
     digitalocean_database_cluster.mysql,
     digitalocean_database_db.app,
