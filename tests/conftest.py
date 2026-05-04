@@ -4,12 +4,23 @@ from collections.abc import Generator
 import pytest
 from flask import Flask
 
-# Set DATABASE_PATH before importing app.app — the module-level init_db() reads it.
-TEST_DATABASE = os.path.join(os.path.dirname(__file__), "test.db")
-os.environ["DATABASE_PATH"] = TEST_DATABASE
+# Provide DB_* env vars *before* importing app.app — its module-level
+# build_database_uri() and db.create_all() read them at import time.
+# Use setdefault so a real environment (CI, dev shell) overrides these
+# placeholders. DB_SSL_CA="" disables TLS, which is correct for the local
+# mysql:8 service container and the CI service container.
+os.environ.setdefault("DB_HOST", "127.0.0.1")
+os.environ.setdefault("DB_PORT", "3306")
+os.environ.setdefault("DB_NAME", "todos")
+os.environ.setdefault("DB_USER", "todoapp")
+os.environ.setdefault("DB_PASSWORD", "todopw")
+os.environ.setdefault("DB_SSL_CA", "")
 
-import app.app as app_module  # noqa: E402
+from sqlalchemy import delete  # noqa: E402
+
 from app.app import app as flask_app  # noqa: E402
+from app.db import db  # noqa: E402
+from app.models import Todo  # noqa: E402
 
 # ── pytest-flask integration ──────────────────────────────────────────────────
 
@@ -30,7 +41,6 @@ def clean_db() -> Generator[None, None, None]:
     """Truncate all rows before each test so tests never share state.
     The schema (created once at module import) is preserved."""
     with flask_app.app_context():
-        db = app_module.get_db()
-        db.execute("DELETE FROM todos")
-        db.commit()
+        db.session.execute(delete(Todo))
+        db.session.commit()
     yield

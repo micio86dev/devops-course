@@ -1,58 +1,54 @@
-"""Integration tests — DB helpers.
+"""Integration tests — SQLAlchemy data layer against real MySQL.
 
-These tests exercise get_db / close_db / init_db against a real SQLite file.
-No HTTP layer is involved: each test opens its own app_context directly.
-Test isolation is provided by the clean_db autouse fixture in tests/conftest.py.
+These tests assume a reachable MySQL server (compose service `mysql`
+locally, mysql:8 service container in CI). The clean_db autouse fixture
+in tests/conftest.py truncates rows between tests; the schema is created
+once at module import via app.app's module-level db.create_all().
 """
 
-import sqlite3
+from sqlalchemy import inspect, select
 
-import app.app as app_module
 from app.app import app as flask_app
+from app.db import db
+from app.models import Todo
 
 
-class TestGetDb:
-    def test_returns_connection(self) -> None:
+class TestSchema:
+    def test_todos_table_exists(self) -> None:
         with flask_app.app_context():
-            db = app_module.get_db()
-            assert db is not None
+            inspector = inspect(db.engine)
+            assert "todos" in inspector.get_table_names()
 
-    def test_returns_same_connection_on_second_call(self) -> None:
+    def test_create_all_is_idempotent(self) -> None:
+        # CREATE TABLE IF NOT EXISTS — calling twice must not raise.
         with flask_app.app_context():
-            db1 = app_module.get_db()
-            db2 = app_module.get_db()
-            assert db1 is db2
+            db.create_all()
+            db.create_all()
 
-    def test_row_factory_is_sqlite_row(self) -> None:
+
+class TestSession:
+    def test_round_trips_a_todo(self) -> None:
         with flask_app.app_context():
-            db = app_module.get_db()
-            assert db.row_factory == sqlite3.Row
+            todo = Todo(text="round trip")
+            db.session.add(todo)
+            db.session.commit()
+            db.session.refresh(todo)
+            fetched = db.session.execute(select(Todo).where(Todo.id == todo.id)).scalar_one()
+            assert fetched.text == "round trip"
+            assert fetched.done == 0
 
-
-class TestCloseDb:
-    def test_closes_existing_connection(self) -> None:
-        # get_db() sets g.db; close_db is called automatically on context exit
+    def test_default_done_is_zero(self) -> None:
         with flask_app.app_context():
-            app_module.get_db()
-        # No exception means the connection was closed cleanly
+            todo = Todo(text="default done")
+            db.session.add(todo)
+            db.session.commit()
+            db.session.refresh(todo)
+            assert todo.done == 0
 
-    def test_no_error_when_no_connection_was_opened(self) -> None:
-        # close_db must handle g.db being absent (db is None branch)
+    def test_created_at_is_populated_by_server_default(self) -> None:
         with flask_app.app_context():
-            pass  # never call get_db; teardown still fires
-
-
-class TestInitDb:
-    def test_creates_todos_table(self) -> None:
-        with flask_app.app_context():
-            app_module.init_db()
-            db = app_module.get_db()
-            rows = db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='todos'"
-            ).fetchall()
-            assert len(rows) == 1
-
-    def test_is_idempotent(self) -> None:
-        with flask_app.app_context():
-            app_module.init_db()
-            app_module.init_db()  # CREATE TABLE IF NOT EXISTS must not raise
+            todo = Todo(text="timestamped")
+            db.session.add(todo)
+            db.session.commit()
+            db.session.refresh(todo)
+            assert todo.created_at is not None

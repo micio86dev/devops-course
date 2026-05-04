@@ -37,15 +37,14 @@ COPY --from=builder /opt/venv /opt/venv
 # Copia il codice applicativo (già di proprietà di appuser → no PermissionError)
 COPY --chown=appuser:appgroup app/ .
 
-# Volume per il database SQLite persistente
-RUN mkdir -p /data && chown appuser:appgroup /data
-VOLUME ["/data"]
-
-# Aggiungi il venv al PATH
+# Aggiungi il venv al PATH.
+# DB_SSL_CA punta al path *dentro al container* dove docker-compose.prod.yml
+# monta in read-only il certificato CA del Managed MySQL. Per dev locale
+# (mysql:8 senza TLS) il file non esiste e l'app cade in fallback no-TLS.
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DATABASE_PATH=/data/todos.db \
+    DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem \
     FLASK_APP=app.py
 
 # Porta esposta (documentativa — non fa il publish di per sé)
