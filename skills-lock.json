@@ -26,6 +26,18 @@
       "sourceType": "github",
       "computedHash": "e9ac24e79715ef3060bd4ae376052f8d863b830604e69cb513b39764bf47ee53"
     },
+    "grafana-dashboards": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/grafana-dashboards/SKILL.md",
+      "computedHash": "e9b692daf06faf96fa28b2b98f50b362e68b974db5ab503963a610c719cda79b"
+    },
+    "loki": {
+      "source": "grafana/skills",
+      "sourceType": "github",
+      "skillPath": "skills/grafana-lgtm/loki/SKILL.md",
+      "computedHash": "0c83822f226a02921e12cecb35f1270d89744a782895690d4a4e8904588fb07c"
+    },
     "playwright-best-practices": {
       "source": "currents-dev/playwright-best-practices-skill",
       "sourceType": "github",
@@ -36,6 +48,12 @@
       "sourceType": "github",
       "computedHash": "17b68556620db6799a69ce72946b42eea69547856486847d42d004237f07256d"
     },
+    "prometheus-configuration": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/prometheus-configuration/SKILL.md",
+      "computedHash": "b3ba83d21bff22697148ca6ddd52eb4fd1196171b6f8132e80cfa20cc27dd8b8"
+    },
     "python-performance-optimization": {
       "source": "wshobson/agents",
       "sourceType": "github",
@@ -45,6 +63,12 @@
       "source": "getsentry/skills",
       "sourceType": "github",
       "computedHash": "ec9792f5fd065e020c48ab5a57707c83435c286c449ba98dfa726d7b1842c868"
+    },
+    "slo-implementation": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/slo-implementation/SKILL.md",
+      "computedHash": "42401f6f1039dcf20db7c872135632ed7725a4dbdfa840e03d72c51eae7ae0b1"
     },
     "systematic-debugging": {
       "source": "obra/superpowers",

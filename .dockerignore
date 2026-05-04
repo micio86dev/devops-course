@@ -42,7 +42,10 @@ env/
 # ── Testing ───────────────────────────────────────────────────────────────────
 # Test files, config, and output are never needed at runtime
 tests/
+# default: exclude all test
 requirements-test.txt
+# but re-include for build Docker
+!requirements-test.txt
 pytest.ini
 .coveragerc
 .coverage

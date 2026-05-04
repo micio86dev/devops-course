@@ -64,3 +64,21 @@ CMD ["gunicorn", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "app:app"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 3 — dev
+#   Estende runtime aggiungendo tool di sviluppo (ruff, mypy, ecc.)
+#   Usato solo in locale tramite docker-compose.override.yml
+# ─────────────────────────────────────────────────────────────────────────────
+FROM runtime AS dev
+
+USER root
+
+# Copia requirements di test/dev
+COPY requirements-test.txt /tmp/
+
+# Installa tool di sviluppo nel venv già esistente
+RUN pip install --no-cache-dir -r /tmp/requirements-test.txt
+
+# Torna a utente non root
+USER appuser
