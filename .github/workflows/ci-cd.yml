@@ -383,6 +383,28 @@ jobs:
               exit 1
             fi
 
+            # Sanity-check the values look right. A common pitfall is running
+            # `gh secret set ... --body "$(terraform output -raw mysql_port)"`
+            # from outside the infrastructure/ dir or against a stale state:
+            # terraform writes "Warning: No outputs found" (with ANSI escapes)
+            # to stdout/stderr and the warning text becomes the secret. Catch
+            # it here, not 8 frames deep inside Python's int() or the DNS lib.
+            if ! printf '%s' "$DB_HOST" | grep -qE '^[A-Za-z0-9._-]+$'; then
+              echo "ERROR: DB_HOST does not look like a hostname/IP."
+              echo "First 80 chars: $(printf '%s' "$DB_HOST" | head -c 80 | cat -v)"
+              echo "Likely cause: 'terraform output -raw mysql_private_host' returned"
+              echo "a warning instead of the value, and that warning was stored as the"
+              echo "GitHub secret. Re-run 'gh secret set' from infrastructure/ after a"
+              echo "successful 'terraform apply'. See docs/MYSQL_MIGRATION.md section 6."
+              exit 1
+            fi
+            if ! printf '%s' "$DB_PORT" | grep -qE '^[0-9]+$'; then
+              echo "ERROR: DB_PORT is not numeric."
+              echo "First 80 chars: $(printf '%s' "$DB_PORT" | head -c 80 | cat -v)"
+              echo "Same likely cause and fix as DB_HOST above."
+              exit 1
+            fi
+
             # Export per gli step successivi di docker compose
             export IMAGE_TAG=${{ github.ref_name }}
             export GITHUB_REPOSITORY=${{ github.repository }}
