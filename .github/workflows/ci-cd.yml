@@ -230,9 +230,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
-      # ensure target dir). MUST run before SCP — otherwise SCP can race
-      # against cloud-init still creating /root/docker-todo.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target
+      # dir). MUST run before SCP — otherwise SCP can race against cloud-init
+      # still creating /root/docker-todo.
       - name: Prepare staging nodes
         uses: appleboy/ssh-action@v1
         with:
@@ -248,50 +248,8 @@ jobs:
 
             # Always ensure packages — apt is idempotent if already installed
             apt-get update -qq
-            apt-get install -y docker.io docker-compose-v2 nfs-common
+            apt-get install -y docker.io docker-compose-v2
             systemctl enable --now docker
-
-            # Self-heal NFS mount.
-            # If cloud-init didn't write the fstab entry, reconstruct it from
-            # /etc/nfs-server-ip (written by cloud-init) or NFS_SERVER_IP var.
-            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
-            if [ -z "$NFS_IP" ]; then
-              echo "❌ No NFS server IP available."
-              echo "Either /etc/nfs-server-ip is missing (broken cloud-init)"
-              echo "or the NFS_SERVER_IP GitHub variable is unset."
-              echo "Run: terraform output -raw db_private_ip"
-              echo "and set it as a 'staging' environment variable in GitHub."
-              exit 1
-            fi
-            mkdir -p /mnt/todo-data
-            if ! grep -q '/mnt/todo-data' /etc/fstab; then
-              echo "Reconstructing fstab entry: NFS server $NFS_IP"
-              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
-            fi
-
-            if ! mountpoint -q /mnt/todo-data; then
-              echo "/mnt/todo-data not mounted, retrying..."
-              for i in $(seq 1 12); do
-                mount /mnt/todo-data 2>/dev/null && break
-                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
-                sleep 10
-              done
-            fi
-            if ! mountpoint -q /mnt/todo-data; then
-              echo "❌ NFS mount failed after 2 min — aborting"
-              echo "--- fstab ---"
-              cat /etc/fstab
-              echo "--- port 2049 reachable? ---"
-              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
-              echo "--- showmount ---"
-              showmount -e "$NFS_IP" 2>&1 || true
-              echo "--- mount error ---"
-              mount /mnt/todo-data 2>&1 || true
-              exit 1
-            fi
-            # Container appuser writes /data/todos.db; permissive perms on
-            # the NFS mount let the non-root UID write to the share
-            chmod 777 /mnt/todo-data
 
             mkdir -p /root/docker-todo
 
@@ -449,8 +407,6 @@ jobs:
             docker ps -a
             echo "--- container logs ---"
             docker logs docker-todo-prod --tail 100 2>&1 || true
-            echo "--- mount ---"
-            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
             exit 1
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -470,8 +426,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure NFS,
-      # ensure target dir). Must run before SCP to avoid race.
+      # Step 1: prepare nodes (wait cloud-init, ensure Docker, ensure target
+      # dir). Must run before SCP to avoid race.
       - name: Prepare production nodes
         uses: appleboy/ssh-action@v1
         with:
@@ -487,39 +443,8 @@ jobs:
 
             # Always ensure packages — apt is idempotent if already installed
             apt-get update -qq
-            apt-get install -y docker.io docker-compose-v2 nfs-common
+            apt-get install -y docker.io docker-compose-v2
             systemctl enable --now docker
-
-            # Self-heal NFS mount (see staging deploy comment for details)
-            NFS_IP=$(cat /etc/nfs-server-ip 2>/dev/null || echo "${{ vars.NFS_SERVER_IP }}")
-            if [ -z "$NFS_IP" ]; then
-              echo "❌ No NFS server IP available. Set NFS_SERVER_IP in GitHub vars."
-              exit 1
-            fi
-            mkdir -p /mnt/todo-data
-            if ! grep -q '/mnt/todo-data' /etc/fstab; then
-              echo "$NFS_IP:/srv/todo-data /mnt/todo-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
-            fi
-            if ! mountpoint -q /mnt/todo-data; then
-              for i in $(seq 1 12); do
-                mount /mnt/todo-data 2>/dev/null && break
-                echo "  attempt $i/12: NFS mount failed, retrying in 10s..."
-                sleep 10
-              done
-            fi
-            if ! mountpoint -q /mnt/todo-data; then
-              echo "❌ NFS mount failed after 2 min — aborting"
-              echo "--- fstab ---"
-              cat /etc/fstab
-              echo "--- port 2049 reachable? ---"
-              nc -zvw5 "$NFS_IP" 2049 2>&1 || true
-              echo "--- showmount ---"
-              showmount -e "$NFS_IP" 2>&1 || true
-              echo "--- mount error ---"
-              mount /mnt/todo-data 2>&1 || true
-              exit 1
-            fi
-            chmod 777 /mnt/todo-data
 
             mkdir -p /root/docker-todo
 
@@ -581,6 +506,33 @@ jobs:
             # Container-side path: vedi commento equivalente nel deploy staging.
             export DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem
 
+            # Fail-fast: se DB_HOST e' ancora vuoto qui, ne' .env.mysql ne'
+            # i secret hanno fornito la connection string.
+            if [ -z "${DB_HOST:-}" ]; then
+              echo "ERROR: DB_HOST is empty after sourcing .env.mysql and applying secrets."
+              echo "  - .env.mysql exists?  $([ -f .env.mysql ] && echo yes || echo NO)"
+              echo "  - mysql-ca.pem exists? $([ -f mysql-ca.pem ] && echo yes || echo NO)"
+              echo "Set the GH secrets DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD/DB_SSL_CA"
+              echo "for this environment, or recycle the app droplets so cloud-init writes"
+              echo ".env.mysql. See docs/MYSQL_MIGRATION.md section 6."
+              exit 1
+            fi
+            if ! printf '%s' "$DB_HOST" | grep -qE '^[A-Za-z0-9._-]+$'; then
+              echo "ERROR: DB_HOST does not look like a hostname/IP."
+              echo "First 80 chars: $(printf '%s' "$DB_HOST" | head -c 80 | cat -v)"
+              echo "Likely cause: 'terraform output -raw mysql_private_host' returned"
+              echo "a warning instead of the value, and that warning was stored as the"
+              echo "GitHub secret. Re-run 'gh secret set' from infrastructure/ after a"
+              echo "successful 'terraform apply'. See docs/MYSQL_MIGRATION.md section 6."
+              exit 1
+            fi
+            if ! printf '%s' "$DB_PORT" | grep -qE '^[0-9]+$'; then
+              echo "ERROR: DB_PORT is not numeric."
+              echo "First 80 chars: $(printf '%s' "$DB_PORT" | head -c 80 | cat -v)"
+              echo "Same likely cause and fix as DB_HOST above."
+              exit 1
+            fi
+
             # Export per gli step successivi di docker compose
             export IMAGE_TAG=latest
             export GITHUB_REPOSITORY=${{ github.repository }}
@@ -623,6 +575,4 @@ jobs:
             docker ps -a
             echo "--- container logs ---"
             docker logs docker-todo-prod --tail 100 2>&1 || true
-            echo "--- mount ---"
-            mount | grep -E 'todo-data|nfs' || echo "(no NFS mount found)"
             exit 1

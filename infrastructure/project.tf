@@ -26,19 +26,16 @@ resource "digitalocean_project_resources" "course" {
     # [*].urn = lista degli URN di tutti gli app nodes
     digitalocean_droplet.app[*].urn,
     [
-      # Droplet DB self-managed (con SQLite + NFS)
-      digitalocean_droplet.db.urn,
-
-      # CAMBIO RISPETTO ALLA VERSIONE PRECEDENTE:
-      # niente piu' digitalocean_droplet.cache.urn (la Droplet non esiste piu')
-      # al suo posto: l'URN del cluster Valkey managed
+      # Cluster Valkey managed
       digitalocean_database_cluster.cache.urn,
 
-      # Cluster MySQL managed (sostituira' la Droplet DB self-managed
-      # in un PR di follow-up dopo cutover)
+      # Cluster MySQL managed
       digitalocean_database_cluster.mysql.urn,
 
       digitalocean_loadbalancer.public.urn,
+
+      # Nodo monitoring (Prometheus, Grafana, Loki, Alertmanager)
+      digitalocean_droplet.monitoring.urn,
     ]
   )
   # Nota: VPC, SSH key e Firewall NON vanno qui

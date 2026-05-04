@@ -1,12 +1,10 @@
 # ============================================================================
 # database-mysql.tf
-# Managed MySQL su DigitalOcean: SOSTITUISCE la Droplet self-managed che
-# girava SQLite via NFS export.
+# Managed MySQL su DigitalOcean.
 #
 # CONTESTO PEDAGOGICO (lezione DB managed):
-# - SQLite + NFS funziona ma e' un single-point-of-failure: la Droplet DB
-#   tiene sia il file che l'export NFS. Se cade, tutta l'app va giu'.
-# - Niente backup automatici, niente point-in-time recovery, niente HA.
+# - Un database self-managed e' un single-point-of-failure: niente backup
+#   automatici, niente point-in-time recovery, niente HA.
 # - Il managed MySQL di DigitalOcean offre snapshot giornalieri, PITR,
 #   patch automatiche, e (con node_count >= 2) failover automatico.
 # - Stessa lezione del Valkey: alcune cose si comprano, non si gestiscono.

@@ -1,19 +1,19 @@
-# Lezione 2: LB + 2 nodi app + DB self-managed + Managed Valkey
+# Lezione: LB + 2 nodi app + Managed MySQL + Managed Valkey + Monitoring
 
-> **Architettura ibrida:** Droplet self-managed dove ha senso didattico (DB con NFS),
-> Managed DigitalOcean dove conviene operativamente (cache Valkey).
+> **Architettura managed:** tutto il database è su DigitalOcean Managed MySQL. La cache è su
+> Managed Valkey. Un nodo monitoring dedicato ospita Prometheus, Grafana, Loki e Alertmanager.
 
 ---
 
 ## La struttura della cartella
 
 ```
-todo-app-infra-v2/
+infrastructure/
 ├── .gitignore
 ├── terraform.tfvars            ← VALORI segreti (gitignored!)
-├── terraform.tfvars.example    ← template da copiare
+├── terraform-example.tfvars    ← template da copiare
 │
-├── provider.tf                 ← Terraform + provider DigitalOcean
+├── provider.tf                 ← Terraform + provider DigitalOcean + null
 ├── variables.tf                ← dichiarazione delle variabili
 ├── locals.tf                   ← tag comuni
 ├── outputs.tf                  ← cosa stampare a fine apply
@@ -22,29 +22,26 @@ todo-app-infra-v2/
 ├── ssh.tf                      ← chiave SSH
 ├── network.tf                  ← VPC privata
 │
-├── droplet-db.tf               ← nodo database self-managed (NFS + SQLite)
 ├── droplet-app.tf              ← nodi applicativi (×2)
+├── droplet-monitoring.tf       ← nodo monitoring (Prometheus + Grafana + Loki)
 ├── load-balancer.tf            ← Load Balancer pubblico
 │
-├── database-valkey.tf          ← cluster Managed Valkey (NUOVO)
+├── database-valkey.tf          ← cluster Managed Valkey
+├── database-mysql.tf           ← cluster Managed MySQL
 │
 ├── firewall-app.tf             ← regole firewall nodi app
-├── firewall-db.tf              ← regole firewall nodo DB
+├── firewall-monitoring.tf      ← regole firewall nodo monitoring
+│
+├── null-resource-node-agents.tf ← installa node_exporter + cAdvisor + Promtail sui nodi app
 │
 └── cloud-init/
-    ├── db.yaml                 ← bootstrap nodo DB (NFS server)
-    └── app.yaml                ← bootstrap nodi app (Docker + container)
+│   ├── app.yaml                ← bootstrap nodi app (Docker + env files MySQL/Valkey)
+│   └── monitoring.yaml         ← bootstrap nodo monitoring (tutti i servizi via Docker Compose)
+│
+└── templates/
+    ├── promtail.yml.tpl        ← config Promtail per-nodo (vars: monitoring_node_ip, node_name)
+    └── agents-compose.yml      ← Docker Compose per agenti sui nodi app
 ```
-
-**Cosa è sparito rispetto alla versione "tutto self-managed":**
-
-- ❌ `droplet-cache.tf`
-- ❌ `firewall-cache.tf`
-- ❌ `cloud-init/cache.yaml`
-
-**Cosa è apparso:**
-
-- ✅ `database-valkey.tf` (cluster Managed Valkey)
 
 ---
 
@@ -55,139 +52,81 @@ todo-app-infra-v2/
                               │
                               ▼  HTTP :80
                      ┌────────────────┐
-                     │ Load Balancer  │  ← unico IP pubblico
+                     │ Load Balancer  │  ← unico IP pubblico per il traffico app
                      └────┬───────┬───┘
                           │       │  least-connections verso :5001
-       ╔══════════════════│═══════│═══════════════════╗
-       ║   VPC privata    ▼       ▼   10.10.10.0/24   ║
-       ║   ┌──────────────┐    ┌──────────────┐       ║
-       ║   │ App Node 1   │    │ App Node 2   │       ║
-       ║   │ Docker:5001  │    │ Docker:5001  │       ║
-       ║   │   ↓          │    │   ↓          │       ║
-       ║   │ docker-todo  │    │ docker-todo  │       ║
-       ║   │ -prod :5000  │    │ -prod :5000  │       ║
-       ║   └────┬────┬────┘    └────┬────┬────┘       ║
-       ║        │    │              │    │            ║
-       ║   NFS  │    │ Valkey  NFS  │    │ Valkey     ║
-       ║  :2049 ▼    ▼ :25061 :2049 ▼    ▼ :25061     ║
-       ║   ┌──────────────┐    ┌──────────────┐       ║
-       ║   │  DB Node     │    │ Managed DB   │       ║
-       ║   │  Droplet     │    │ Valkey 8     │       ║
-       ║   │  SQLite+NFS  │    │ (DigitalOcean│       ║
-       ║   │  self-managed│    │  gestito)    │       ║
-       ║   └──────────────┘    └──────────────┘       ║
-       ╚═══════════════════════════════════════════════╝
+       ╔══════════════════│═══════│═════════════════════════════════╗
+       ║   VPC privata    ▼       ▼   10.10.10.0/24                ║
+       ║   ┌──────────────┐    ┌──────────────┐                    ║
+       ║   │ App Node 1   │    │ App Node 2   │                    ║
+       ║   │ Docker:5001  │    │ Docker:5001  │                    ║
+       ║   │ node_exporter│    │ node_exporter│                    ║
+       ║   │ cAdvisor     │    │ cAdvisor     │                    ║
+       ║   │ Promtail     │    │ Promtail     │                    ║
+       ║   └──┬───┬───┬───┘    └──┬───┬───┬───┘                    ║
+       ║      │   │   │           │   │   │                        ║
+       ║  MySQL│  Valkey Loki  MySQL  Valkey Loki                  ║
+       ║  :25060 :25061 :3100 :25060 :25061 :3100                  ║
+       ║      │   │   │           │   │   │                        ║
+       ║   ┌──▼───▼───▼───────────▼───▼───▼──┐  ┌──────────────┐  ║
+       ║   │  Managed MySQL   Managed Valkey  │  │  Monitoring  │  ║
+       ║   │  (DigitalOcean)  (DigitalOcean)  │  │  Prometheus  │  ║
+       ║   │  port 25060      port 25061      │  │  Grafana :80 │  ║
+       ║   └─────────────────────────────────┘  │  Loki :3100  │  ║
+       ║                                         │  Alertmanager│  ║
+       ║                                         └──────────────┘  ║
+       ╚═════════════════════════════════════════════════════════════╝
 ```
-
-**Note importanti:**
-
-- Container Docker: **`docker-todo-prod`** (lo stesso del tuo `docker-compose.prod.yml`)
-- Variabile `DATABASE_PATH=/data/todos.db` (con la "s" finale, come nel tuo Dockerfile)
-- Health check del LB sul path **`/healthz`**
-- **Cache su porta 25061**, non 6379 (i Managed DO usano porte non-standard)
-- **Connessione TLS obbligatoria** (`rediss://` con doppia "s") sul Managed Valkey
 
 ---
 
-## Perché questa scelta ibrida?
+## Scelte architetturali
 
-| Componente         | Strategia    | Motivo                                                                                                          |
-| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------- |
-| **DB (SQLite)**    | Self-managed | Didatticamente forte: vedi NFS, mount, configurazione manuale                                                   |
-| **Cache (Valkey)** | Managed      | Operativamente sensato: backup, patch, password automatici. Su DO l'unica opzione cache managed dal 30/06/2025. |
-
-Questa è la situazione più realistica nelle aziende: si mischiano servizi managed (per scaricare lavoro operativo) e componenti self-hosted (per controllo o costi). Insegna agli studenti che **non è una scelta tutto-o-niente**.
+| Componente         | Strategia    | Motivo                                                                         |
+| ------------------ | ------------ | ------------------------------------------------------------------------------ |
+| **DB (MySQL)**     | Managed      | Alta disponibilità, backup automatici, no patching manuale                     |
+| **Cache (Valkey)** | Managed      | Unica opzione cache managed su DO dal 30/06/2025; backup e password automatici |
+| **Monitoring**     | Self-managed | Prometheus/Grafana/Loki non esistono come managed su DO; didatticamente forte  |
 
 ---
 
 ## Nota didattica: Redis → Valkey
 
-Su DigitalOcean dal 30 giugno 2025 **non esiste più Managed Redis**. È stato sostituito da Managed Valkey (fork open-source di Redis 7.2.4 sotto BSD pulita, supportato da Linux Foundation).
+Su DigitalOcean dal 30 giugno 2025 **non esiste più Managed Redis**. È stato sostituito da
+Managed Valkey (fork open-source di Redis 7.2.4 sotto BSD pulita, supportato da Linux Foundation).
 
 Per la nostra app Python:
 
 - Il client `redis-py` parla con Valkey **senza modifiche al codice**.
-- L'unica differenza pratica: Valkey su DO **richiede TLS e password** (per questo `rediss://` invece di `redis://`).
-- Tutta questa complessità è incapsulata in `REDIS_URL`: l'app legge un'unica variabile e tutto funziona.
-
-Per il contesto storico completo di questa transizione, vedi il PDF didattico allegato.
+- L'unica differenza pratica: Valkey su DO **richiede TLS e password** (`rediss://` con doppia "s").
+- Tutta questa complessità è incapsulata in `REDIS_URL`.
 
 ---
 
-## Step 0 — Setup sicuro (invariato)
+## Step 0 — Setup sicuro
 
 **0.1** Pannello DO → **Manage → Projects → New Project** → nome: `devops-course`
 
 **0.2** **API → Generate New Token** con custom scopes:
 
 - `droplet`, `ssh_key`, `firewall`, `vpc`, `load_balancer`, `project`, `tag`
-- **`database`** ← nuovo, necessario per il cluster Valkey
+- `database` — necessario per i cluster MySQL e Valkey
 
 Scadenza 30 giorni.
-
-> ⚠️ Se stai aggiornando da una versione precedente del corso, devi rigenerare il token per aggiungere lo scope `database`.
 
 **0.3** Sei già nella cartella `infrastructure/`.
 
 ---
 
-## Migrazione da Redis self-hosted a Managed Valkey
-
-Se vieni dalla versione precedente con Droplet Redis self-hosted, ecco i passi esatti:
-
-### 1. Rimuovi i file vecchi
-
-```bash
-rm droplet-cache.tf       # (o droplet-redis.tf se non rinominato)
-rm firewall-cache.tf      # (o firewall-redis.tf)
-rm cloud-init/cache.yaml  # (o cloud-init/redis.yaml)
-```
-
-### 2. Aggiungi il file nuovo
-
-Crea `database-valkey.tf` (vedi contenuto allegato).
-
-### 3. Aggiorna i 4 file modificati
-
-- `variables.tf` — aggiunte 3 variabili: `cache_engine_version`, `cache_size`, `cache_node_count`
-- `project.tf` — assegna `digitalocean_database_cluster.cache.urn` invece di `digitalocean_droplet.cache.urn`
-- `droplet-app.tf` — passa `cache_uri` al template invece di `cache_private_ip`
-- `outputs.tf` — `cache_host` e `cache_uri` invece di `cache_node_ip`
-- `cloud-init/app.yaml` — usa `REDIS_URL` invece di `REDIS_HOST` + `REDIS_PORT`
-
-### 4. Applica
-
-```bash
-terraform plan
-```
-
-Aspettati di vedere:
-
-```
-Plan: 1 to add (database-cluster), 1 to add (database-firewall),
-      2 to change (project_resources, app[*]),
-      2 to destroy (droplet.cache, firewall.cache).
-```
-
-Poi:
-
-```bash
-terraform apply
-```
-
-⚠️ **Tempo:** la creazione del cluster Valkey richiede **3-5 minuti**. Le Droplet app vengono ricreate (perché cambia il loro `user_data`), altri 3-5 minuti. Totale: **~10 minuti**.
-
----
-
 ## Pre-flight checklist
 
-| #   | Check                           | Come verificare                           |
-| --- | ------------------------------- | ----------------------------------------- |
-| 1   | Token con scope `database`      | Pannello DO → API                         |
-| 2   | Project `devops-course` esiste  | Pannello → Manage → Projects              |
-| 3   | App Python supporta `REDIS_URL` | `redis.from_url(os.environ['REDIS_URL'])` |
-| 4   | Tutti i file `.tf` ci sono      | `ls -la *.tf cloud-init/`                 |
-| 5   | File ASCII puro                 | `file *.tf cloud-init/*.yaml`             |
+| #   | Check                          | Come verificare                      |
+| --- | ------------------------------ | ------------------------------------ |
+| 1   | Token con scope `database`     | Pannello DO → API                    |
+| 2   | Project `devops-course` esiste | Pannello → Manage → Projects         |
+| 3   | `terraform.tfvars` compilato   | `cat terraform.tfvars` (mai su git!) |
+| 4   | Tutti i file `.tf` ci sono     | `ls -la *.tf cloud-init/ templates/` |
+| 5   | File ASCII puro                | `file *.tf cloud-init/*.yaml`        |
 
 ---
 
@@ -209,35 +148,45 @@ terraform apply tfplan
 LB_IP=$(terraform output -raw load_balancer_ip)
 curl -i http://$LB_IP/healthz
 # Risposta attesa: HTTP/1.1 200 OK
-```
 
-Per vedere la connection string del cache:
-
-```bash
-terraform output cache_uri
-# rediss://default:LA-PASSWORD@devops-course-cache-do-user-xxxxxx-0.b.db.ondigitalocean.com:25061
-```
-
-Per testare la connessione cache da un nodo app:
-
-```bash
-APP1_IP=$(terraform output -json app_node_ips | jq -r '.[0]')
-ssh root@$APP1_IP 'docker exec docker-todo-prod env | grep REDIS_URL'
+# Grafana
+open http://$(terraform output -raw monitoring_node_public_ip)
+# Login: admin / <grafana_password da tfvars>
 ```
 
 ---
 
-## Costi
+## GitHub Secrets da settare dopo `terraform apply`
 
-| Componente                      | Costo/mese |
-| ------------------------------- | ---------- |
-| 2 × Droplet app (s-1vcpu-1gb)   | ~$12       |
-| 1 × Droplet DB (s-1vcpu-1gb)    | ~$6        |
-| Load Balancer                   | ~$12       |
-| Managed Valkey (db-s-1vcpu-1gb) | ~$15       |
-| **Totale**                      | **~$45**   |
+Dalla cartella `infrastructure/`:
 
-vs ~$36 della versione 100% self-managed. **+$9/mese** per non occuparti più di patch, password, backup di Redis.
+```bash
+# Secret di deploy (stessi per staging e production)
+gh secret set DEPLOY_HOSTS   -e staging --body "$(terraform output -json app_node_ips | jq -r 'join(",")')"
+gh secret set DEPLOY_USER    -e staging --body "root"
+gh secret set DEPLOY_SSH_KEY -e staging --body "$(cat ~/.ssh/id_ed25519)"
+
+# Secret MySQL (per rotazione credenziali senza re-apply Terraform)
+gh secret set DB_HOST     -e staging --body "$(terraform output -raw mysql_private_host)"
+gh secret set DB_PORT     -e staging --body "$(terraform output -raw mysql_port)"
+gh secret set DB_NAME     -e staging --body "$(terraform output -raw mysql_database)"
+gh secret set DB_USER     -e staging --body "$(terraform output -raw mysql_user)"
+gh secret set DB_PASSWORD -e staging --body "$(terraform output -raw mysql_password)"
+gh secret set DB_SSL_CA   -e staging --body "$(terraform output -raw mysql_ca_certificate | base64)"
+```
+
+---
+
+## Costi (fra1, maggio 2026)
+
+| Componente                           | Costo/mese |
+| ------------------------------------ | ---------- |
+| 2 × Droplet app (s-1vcpu-1gb)        | ~$12       |
+| 1 × Droplet monitoring (s-1vcpu-2gb) | ~$12       |
+| Load Balancer                        | ~$12       |
+| Managed Valkey (db-s-1vcpu-1gb)      | ~$15       |
+| Managed MySQL (db-s-1vcpu-1gb)       | ~$15       |
+| **Totale**                           | **~$66**   |
 
 ---
 
@@ -247,14 +196,15 @@ vs ~$36 della versione 100% self-managed. **+$9/mese** per non occuparti più di
 terraform destroy
 ```
 
-⚠️ I cluster managed ci mettono **2-3 minuti in più** delle Droplet a essere distrutti. Aspetta che `destroy` finisca completamente prima di chiudere il terminale.
+⚠️ I cluster managed ci mettono **2-3 minuti in più** delle Droplet a essere distrutti.
+Aspetta che `destroy` finisca completamente prima di chiudere il terminale.
 
 ---
 
 ## Compiti per casa
 
 1. 🥉 **Aggiungi un terzo nodo app** (`count = 3` in `droplet-app.tf`)
-2. 🥈 **Migra anche il DB a managed PostgreSQL** (richiede modifica all'app: SQLite → Postgres)
-3. 🥇 **Aggiungi un read replica** al cluster Valkey con `node_count = 2`
-4. 🏆 **HTTPS sul LB** con certificato Let's Encrypt
-5. 🏆🏆 **CD automatico** con GitHub Actions: build immagine → push → deploy sui nodi
+2. 🥈 **Aggiungi un read replica** al cluster Valkey con `node_count = 2`
+3. 🥇 **HTTPS sul LB** con certificato Let's Encrypt
+4. 🏆 **Alert Slack**: configura `alertmanager_slack_url` in `terraform.tfvars`
+5. 🏆🏆 **Grafana dashboard custom**: aggiungi un pannello con le query sull'app Flask
