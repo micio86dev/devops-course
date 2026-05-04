@@ -11,6 +11,13 @@
 #                       Ottenibili con: terraform output app_node_ips
 #   • DEPLOY_USER     — utente SSH (root per Droplet DigitalOcean di default)
 #   • DEPLOY_SSH_KEY  — chiave privata SSH (PEM) per accedere ai nodi
+#
+# Secret MySQL (override sull'.env.mysql scritto dal cloud-init; opzionali ma
+# consigliati per rotazione rapida senza re-applicare Terraform):
+#   • DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD
+#       Sourced via: terraform output -raw mysql_<field>
+#   • DB_SSL_CA       — base64 del certificato CA del cluster
+#       Sourced via: terraform output -raw mysql_ca_certificate | base64
 
 name: CI/CD
 
@@ -87,6 +94,26 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
 
+    # Service container: MySQL 8 raggiungibile su 127.0.0.1:3306.
+    # I --health-* options bloccano l'avvio del job finche' il DB non e' pronto,
+    # quindi pytest puo' importare app/app.py (che chiama db.create_all() a
+    # module level) senza race conditions.
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_DATABASE: todos
+          MYSQL_USER: todoapp
+          MYSQL_PASSWORD: todopw
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpw"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -108,7 +135,14 @@ jobs:
 
       - name: Run full test suite with coverage enforcement
         env:
-          DATABASE_PATH: /tmp/test.db
+          # Tests parlano col service container MySQL via TCP loopback.
+          # DB_SSL_CA="" => no TLS (il container non espone una CA).
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_NAME: todos
+          DB_USER: todoapp
+          DB_PASSWORD: todopw
+          DB_SSL_CA: ""
         run: pytest --cov-fail-under=100
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -267,10 +301,22 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          # appleboy/ssh-action expone le var di environment definite qui dentro
+          # allo script via la sua envs: list. Cosi' i secret DB_* arrivano
+          # dentro alla shell remota senza inline ${{ secrets... }} (che si
+          # espandono a stringa vuota se non settati e farebbero shadowing).
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_B64: ${{ secrets.DB_SSL_CA }}
         with:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DB_HOST,DB_PORT,DB_NAME,DB_USER,DB_PASSWORD,DB_SSL_CA_B64
           command_timeout: 10m
           script: |
             set -e
@@ -283,9 +329,32 @@ jobs:
               [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
             done
 
-            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+            # Decode the base64-encoded CA cert from secret to the host path
+            # docker-compose.prod.yml bind-mounts read-only into the container.
+            # Falls back to whatever cloud-init wrote if the secret isn't set
+            # (additive deploy: existing droplets keep working without changes).
+            if [ -n "${DB_SSL_CA_B64:-}" ]; then
+              echo "$DB_SSL_CA_B64" | base64 -d > /root/docker-todo/mysql-ca.pem
+              chmod 644 /root/docker-todo/mysql-ca.pem
+            fi
 
-            # Export so every subsequent docker compose call sees them
+            # Source env files written by cloud-init.
+            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+            [ -f .env.mysql  ] && export $(cat .env.mysql  | xargs)
+
+            # Workflow secrets win over .env.mysql when both are set —
+            # supports rotation without rerunning Terraform/cloud-init.
+            [ -n "${DB_HOST:-}" ]     && export DB_HOST
+            [ -n "${DB_PORT:-}" ]     && export DB_PORT
+            [ -n "${DB_NAME:-}" ]     && export DB_NAME
+            [ -n "${DB_USER:-}" ]     && export DB_USER
+            [ -n "${DB_PASSWORD:-}" ] && export DB_PASSWORD
+            # Container-side path: docker-compose.prod.yml monta mysql-ca.pem
+            # in /etc/mysql-ca/. Sovrascriviamo qualunque DB_SSL_CA presente
+            # in .env.mysql per essere espliciti sul path che il container vede.
+            export DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem
+
+            # Export per gli step successivi di docker compose
             export IMAGE_TAG=${{ github.ref_name }}
             export GITHUB_REPOSITORY=${{ github.repository }}
 
@@ -415,10 +484,19 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          # Vedi commento equivalente nel deploy staging.
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSL_CA_B64: ${{ secrets.DB_SSL_CA }}
         with:
           host: ${{ secrets.DEPLOY_HOSTS }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DB_HOST,DB_PORT,DB_NAME,DB_USER,DB_PASSWORD,DB_SSL_CA_B64
           command_timeout: 10m
           script: |
             set -e
@@ -431,10 +509,28 @@ jobs:
               [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
             done
 
-            # Carica REDIS_URL dal file scritto dal cloud-init (Valkey URI)
-            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+            # Decode CA cert from secret to host path mounted by compose.
+            # Vedi commento equivalente nel deploy staging.
+            if [ -n "${DB_SSL_CA_B64:-}" ]; then
+              echo "$DB_SSL_CA_B64" | base64 -d > /root/docker-todo/mysql-ca.pem
+              chmod 644 /root/docker-todo/mysql-ca.pem
+            fi
 
-            # Export so every subsequent docker compose call sees them
+            # Source env files written by cloud-init (Valkey URI, MySQL conn).
+            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
+            [ -f .env.mysql  ] && export $(cat .env.mysql  | xargs)
+
+            # Workflow secrets win over .env.mysql for rotation without
+            # re-running Terraform/cloud-init.
+            [ -n "${DB_HOST:-}" ]     && export DB_HOST
+            [ -n "${DB_PORT:-}" ]     && export DB_PORT
+            [ -n "${DB_NAME:-}" ]     && export DB_NAME
+            [ -n "${DB_USER:-}" ]     && export DB_USER
+            [ -n "${DB_PASSWORD:-}" ] && export DB_PASSWORD
+            # Container-side path: vedi commento equivalente nel deploy staging.
+            export DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem
+
+            # Export per gli step successivi di docker compose
             export IMAGE_TAG=latest
             export GITHUB_REPOSITORY=${{ github.repository }}
 
