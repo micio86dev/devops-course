@@ -16,6 +16,18 @@
       "sourceType": "github",
       "computedHash": "e2c6c594828cbbf4f0c181eedcf2bd39a2a49b4f087942b295faf36cdc88c423"
     },
+    "caveman": {
+      "source": "juliusbrussee/caveman",
+      "sourceType": "github",
+      "skillPath": "caveman/SKILL.md",
+      "computedHash": "259cb6ef69b4e9eeb07155c925ce9895ed509b0feb6a7e29cbc9e70d3c7bcfb2"
+    },
+    "devops-engineer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/devops-engineer/SKILL.md",
+      "computedHash": "6de5e562151fe9c227234e81bdc1e647066d6b1822463eadf296a5344b47e35a"
+    },
     "git-workflow": {
       "source": "netresearch/git-workflow-skill",
       "sourceType": "github",
@@ -26,6 +38,18 @@
       "sourceType": "github",
       "computedHash": "e9ac24e79715ef3060bd4ae376052f8d863b830604e69cb513b39764bf47ee53"
     },
+    "grafana-dashboards": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/grafana-dashboards/SKILL.md",
+      "computedHash": "e9b692daf06faf96fa28b2b98f50b362e68b974db5ab503963a610c719cda79b"
+    },
+    "loki": {
+      "source": "grafana/skills",
+      "sourceType": "github",
+      "skillPath": "skills/grafana-lgtm/loki/SKILL.md",
+      "computedHash": "0c83822f226a02921e12cecb35f1270d89744a782895690d4a4e8904588fb07c"
+    },
     "playwright-best-practices": {
       "source": "currents-dev/playwright-best-practices-skill",
       "sourceType": "github",
@@ -35,6 +59,12 @@
       "source": "microsoft/playwright-cli",
       "sourceType": "github",
       "computedHash": "17b68556620db6799a69ce72946b42eea69547856486847d42d004237f07256d"
+    },
+    "prometheus-configuration": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/observability-monitoring/skills/prometheus-configuration/SKILL.md",
+      "computedHash": "b3ba83d21bff22697148ca6ddd52eb4fd1196171b6f8132e80cfa20cc27dd8b8"
     },
     "python-performance-optimization": {
       "source": "wshobson/agents",
