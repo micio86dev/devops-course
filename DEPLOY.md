@@ -31,11 +31,11 @@ In alternativa, nel deploy script aggiungi il login a GHCR:
 
 4. Prima esecuzione (ordine delle operazioni)
 
-1. terraform apply # crea infrastruttura, cloud-init prepara i nodi
-1. Configura i 3 Secrets GitHub (DEPLOY_HOSTS, DEPLOY_USER, DEPLOY_SSH_KEY)
-1. Rendi pubblico il GHCR package (o configura l'accesso)
-1. git push origin main # scatta la pipeline: lint → test → build → deploy
-1. Verifica: curl http://$(terraform -chdir=infrastructure output -raw load_balancer_ip)/healthz
+4.1. terraform apply # crea infrastruttura, cloud-init prepara i nodi
+4.2. Configura i 3 Secrets GitHub (DEPLOY_HOSTS, DEPLOY_USER, DEPLOY_SSH_KEY)
+4.3. Rendi pubblico il GHCR package (o configura l'accesso)
+4.4. git push origin main # scatta la pipeline: lint → test → build → deploy
+4.5. Verifica: curl http://$(terraform -chdir=infrastructure output -raw load_balancer_ip)/healthz
 
 ---
 
@@ -72,3 +72,25 @@ name_prefix = "devops-staging"
 
 Nel workflow GitHub Actions, aggiungi un job deploy-staging che si attiva sui branch develop e un deploy-production su main, con secret separati  
  (STAGING_DEPLOY_HOSTS, PROD_DEPLOY_HOSTS). L'environment staging non richiede approvazione manuale, quello production sì.
+
+---
+
+# usa gh per settare le variabili di environment su Github Actions Secrets & Variables da locale
+
+**staging**
+
+- gh secret set DB_HOST -e staging --body "$(terraform output -raw mysql_private_host)"
+- gh secret set DB_PORT -e staging --body "$(terraform output -raw mysql_port)"
+- gh secret set DB_NAME -e staging --body "$(terraform output -raw mysql_database)"
+- gh secret set DB_USER -e staging --body "$(terraform output -raw mysql_user)"
+- gh secret set DB_PASSWORD -e staging --body "$(terraform output -raw mysql_password)"
+- gh secret set DB_SSL_CA -e staging --body "$(terraform output -raw mysql_ca_certificate | base64)"
+
+**production** (Dopo il merge su main)
+
+- gh secret set DB_HOST -e production --body "$(terraform output -raw mysql_private_host)"
+- gh secret set DB_PORT -e production --body "$(terraform output -raw mysql_port)"
+- gh secret set DB_NAME -e production --body "$(terraform output -raw mysql_database)"
+- gh secret set DB_USER -e production --body "$(terraform output -raw mysql_user)"
+- gh secret set DB_PASSWORD -e production --body "$(terraform output -raw mysql_password)"
+- gh secret set DB_SSL_CA -e production --body "$(terraform output -raw mysql_ca_certificate | base64)"
