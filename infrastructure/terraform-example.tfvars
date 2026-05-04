@@ -24,10 +24,6 @@ docker_image = "utente/todo-app:latest"
 # Password admin di Grafana — scegliere una password sicura
 grafana_password = "una-password-sicura"
 
-# DSN per mysqld_exporter. Valori da: terraform output -raw mysql_password
-# e terraform output -raw mysql_private_host
-mysql_exporter_dsn   = "todoapp:$(terraform output -raw mysql_password)@tcp($(terraform output -raw mysql_private_host):25060)/"
-
 # URI Valkey per redis_exporter. Valore da: terraform output cache_uri
 valkey_exporter_uri  = "$(terraform output cache_uri)"
 
