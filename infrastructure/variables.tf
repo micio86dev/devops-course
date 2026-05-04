@@ -137,3 +137,50 @@ variable "name_prefix" {
   type        = string
   default     = "devops-course"
 }
+
+# ============================================================================
+# Variabili per il nodo monitoring
+# ============================================================================
+
+variable "ssh_private_key" {
+  description = "Contenuto della chiave SSH privata (per remote-exec provisioner sui nodi app)"
+  type        = string
+  sensitive   = true
+}
+
+variable "monitoring_droplet_size" {
+  description = "Taglia della Droplet di monitoring"
+  type        = string
+  default     = "s-1vcpu-2gb"
+}
+
+variable "grafana_password" {
+  description = "Password admin di Grafana"
+  type        = string
+  sensitive   = true
+}
+
+variable "mysql_exporter_dsn" {
+  description = "DSN per mysqld_exporter: user:pass@tcp(host:25060)/"
+  type        = string
+  sensitive   = true
+}
+
+variable "valkey_exporter_uri" {
+  description = "URI Valkey per redis_exporter: rediss://default:pass@host:25061"
+  type        = string
+  sensitive   = true
+}
+
+variable "alertmanager_slack_url" {
+  description = "Webhook Slack per Alertmanager (lascia vuoto per disabilitare)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "alertmanager_slack_channel" {
+  description = "Canale Slack per gli alert"
+  type        = string
+  default     = "#alerts"
+}

@@ -97,3 +97,22 @@ output "project_name" {
   description = "Conferma del Project DO dove sono andate le resource"
   value       = data.digitalocean_project.course.name
 }
+
+# ============================================================================
+# Output del nodo monitoring
+# ============================================================================
+
+output "monitoring_node_public_ip" {
+  description = "IP pubblico del nodo monitoring (per SSH di debug)"
+  value       = digitalocean_droplet.monitoring.ipv4_address
+}
+
+output "monitoring_node_private_ip" {
+  description = "IP privato (VPC) del nodo monitoring"
+  value       = digitalocean_droplet.monitoring.ipv4_address_private
+}
+
+output "grafana_url" {
+  description = "URL Grafana (nginx sul nodo monitoring)"
+  value       = "http://${digitalocean_droplet.monitoring.ipv4_address}"
+}

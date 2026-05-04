@@ -37,6 +37,20 @@ resource "digitalocean_firewall" "app" {
     source_load_balancer_uids = [digitalocean_loadbalancer.public.id]
   }
 
+  # node_exporter: scraping da Prometheus sul nodo monitoring
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "9100"
+    source_addresses = ["${digitalocean_droplet.monitoring.ipv4_address_private}/32"]
+  }
+
+  # cAdvisor: scraping da Prometheus sul nodo monitoring
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "8080"
+    source_addresses = ["${digitalocean_droplet.monitoring.ipv4_address_private}/32"]
+  }
+
   # === REGOLE OUTBOUND (dove possono connettersi DA queste Droplet) ===
 
   # TCP outbound aperto: serve per docker pull, apt, NFS, Redis, ecc.

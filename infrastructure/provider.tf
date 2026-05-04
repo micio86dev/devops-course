@@ -17,6 +17,10 @@ terraform {
       # Evita rotture quando esce una nuova major version
       version = "~> 2.40"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
