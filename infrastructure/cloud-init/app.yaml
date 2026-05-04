@@ -9,6 +9,16 @@ packages:
   - nfs-common
   - netcat-openbsd
 
+# Drop the Managed MySQL CA certificate to disk before the app container
+# starts. The PEM is public material, but we keep it out of the world-readable
+# 0666 default by using cloud-init's idiomatic write_files (runs before runcmd).
+write_files:
+  - path: /root/docker-todo/mysql-ca.pem
+    permissions: "0644"
+    owner: root:root
+    content: |
+      ${indent(8, mysql_ca_certificate)}
+
 runcmd:
   # Install Docker via apt (more reliable than curl|sh in cloud-init:
   # the get.docker.com script uses apt internally and can hit dpkg locks
@@ -48,3 +58,17 @@ runcmd:
   # File is root-only (600): contains credentials, never world-readable
   - echo "REDIS_URL=${cache_uri}" > /root/docker-todo/.env.valkey
   - chmod 600 /root/docker-todo/.env.valkey
+
+  # Write Managed MySQL connection details so CI/CD can source them.
+  # Same pattern as .env.valkey, mode 600 (contains the password).
+  # DB_SSL_CA punta al path *dentro al container* (vedi docker-compose.prod.yml).
+  - |
+    cat > /root/docker-todo/.env.mysql <<'EOF'
+    DB_HOST=${mysql_private_host}
+    DB_PORT=${mysql_port}
+    DB_NAME=${mysql_database}
+    DB_USER=${mysql_user}
+    DB_PASSWORD=${mysql_password}
+    DB_SSL_CA=/etc/mysql-ca/mysql-ca.pem
+    EOF
+  - chmod 600 /root/docker-todo/.env.mysql

@@ -34,6 +34,16 @@ resource "digitalocean_droplet" "app" {
     # La doppia "s" indica TLS (obbligatorio sui managed DO).
     cache_uri = digitalocean_database_cluster.cache.private_uri
 
+    # Connection details del Managed MySQL: cloud-init li scrive in
+    # /root/docker-todo/.env.mysql (mode 600). Sei valori (host/port/db/user/
+    # password/ca_certificate) coerenti con i secret GitHub DB_*.
+    mysql_private_host   = digitalocean_database_cluster.mysql.private_host
+    mysql_port           = digitalocean_database_cluster.mysql.port
+    mysql_database       = digitalocean_database_db.app.name
+    mysql_user           = digitalocean_database_user.app.name
+    mysql_password       = digitalocean_database_user.app.password
+    mysql_ca_certificate = data.digitalocean_database_ca.mysql.certificate
+
     # Passa anche le porte al template (per docker run -p)
     host_port      = var.host_port
     container_port = var.container_port
@@ -48,5 +58,8 @@ resource "digitalocean_droplet" "app" {
   depends_on = [
     digitalocean_droplet.db,
     digitalocean_database_cluster.cache,
+    digitalocean_database_cluster.mysql,
+    digitalocean_database_db.app,
+    digitalocean_database_user.app,
   ]
 }

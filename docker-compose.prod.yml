@@ -4,7 +4,10 @@
 # In CI/CD questo file viene usato dopo il push dell'immagine su GHCR.
 # L'immagine viene presa dal registry (non buildata localmente).
 # GITHUB_REPOSITORY e IMAGE_TAG vengono iniettati dal workflow.
-# REDIS_URL viene letta da /root/docker-todo/.env.valkey (scritto dal cloud-init).
+# REDIS_URL  viene letta da /root/docker-todo/.env.valkey  (cloud-init).
+# DB_*       vengono lette da   /root/docker-todo/.env.mysql   (cloud-init).
+# mysql-ca.pem  viene scritto in /root/docker-todo/ dal cloud-init e bind-montato
+# read-only nel container al path che il driver PyMySQL legge via DB_SSL_CA.
 
 services:
   app:
@@ -17,7 +20,9 @@ services:
       FLASK_DEBUG: "0"
       REDIS_URL: ${REDIS_URL:-} # Valkey URI; app non lo usa (demo infrastrutturale)
     volumes:
-      - /mnt/todo-data:/data # NFS montato dal cloud-init; nessun bind mount del codice
+      # CA del Managed MySQL: read-only, montato dal path scritto da cloud-init.
+      # Il container legge questo file via DB_SSL_CA (default del Dockerfile).
+      - /root/docker-todo/mysql-ca.pem:/etc/mysql-ca/mysql-ca.pem:ro
     command:
       - gunicorn
       - --bind=0.0.0.0:5000
@@ -25,7 +30,10 @@ services:
       - --timeout=30
       - --access-logfile=-
       - --error-logfile=-
-      - app:app
+      # `app.app:app` = package `app` -> modulo `app.py` -> oggetto Flask `app`.
+      # Sovrascrive la CMD del Dockerfile (qui esplicita per i 4 workers di
+      # produzione); deve restare allineata col layout `/srv/app/` del runtime.
+      - app.app:app
     deploy:
       resources:
         limits:

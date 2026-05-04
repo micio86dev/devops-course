@@ -87,6 +87,43 @@ variable "cache_node_count" {
 }
 
 # ============================================================================
+# Variabili NUOVE per il Managed MySQL
+# ============================================================================
+
+variable "mysql_engine_version" {
+  description = "Versione major di MySQL (managed)"
+  type        = string
+  # 8 e' l'unica versione managed disponibile su DO oggi
+  default = "8"
+}
+
+variable "mysql_size" {
+  description = "Slug della size del cluster MySQL"
+  type        = string
+  # db-s-1vcpu-1gb = ~$15/mese, basic tier (sufficiente per la lezione)
+  default = "db-s-1vcpu-1gb"
+}
+
+variable "mysql_node_count" {
+  description = "Numero di nodi del cluster MySQL (1 = no HA)"
+  type        = number
+  # 1 = nodo singolo. Produzione: 2+ per failover automatico.
+  default = 1
+}
+
+variable "mysql_database_name" {
+  description = "Nome del database applicativo dentro al cluster"
+  type        = string
+  default     = "todos"
+}
+
+variable "mysql_user_name" {
+  description = "Nome dell'utente applicativo creato nel cluster"
+  type        = string
+  default     = "todoapp"
+}
+
+# ============================================================================
 
 variable "project_name" {
   description = "Nome del Project DigitalOcean (case-sensitive!)"

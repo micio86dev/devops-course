@@ -1,16 +1,19 @@
 """API tests — HTTP endpoints via Flask test client.
 
 Each test hits a real endpoint through the full Flask request/response cycle.
-The DB is a real SQLite file (tests/test.db); the clean_db autouse fixture
-in tests/conftest.py truncates it before every test.
+The DB is real MySQL (compose service `mysql` locally, mysql:8 service
+container in CI); the clean_db autouse fixture in tests/conftest.py
+truncates it before every test.
 """
 
+from datetime import datetime
 from typing import Any, cast
 
 from flask.testing import FlaskClient
 
-import app.app as app_module
 from app.app import app as flask_app
+from app.db import db
+from app.models import Todo
 
 
 class TestIndex:
@@ -48,16 +51,9 @@ class TestListTodos:
     def test_ordered_by_created_at_desc(self, client: FlaskClient) -> None:
         # Insert with explicit timestamps to make ordering deterministic
         with flask_app.app_context():
-            db = app_module.get_db()
-            db.execute(
-                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
-                ("Older", "2024-01-01 00:00:01"),
-            )
-            db.execute(
-                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
-                ("Newer", "2024-01-01 00:00:02"),
-            )
-            db.commit()
+            db.session.add(Todo(text="Older", created_at=datetime(2024, 1, 1, 0, 0, 1)))
+            db.session.add(Todo(text="Newer", created_at=datetime(2024, 1, 1, 0, 0, 2)))
+            db.session.commit()
 
         todos = client.get("/api/todos").get_json()
         assert todos[0]["text"] == "Newer"
@@ -65,17 +61,11 @@ class TestListTodos:
 
     def test_id_desc_tiebreaker_for_same_second(self, client: FlaskClient) -> None:
         # Two rows with identical created_at: higher id must appear first
+        same_ts = datetime(2024, 1, 1, 0, 0, 0)
         with flask_app.app_context():
-            db = app_module.get_db()
-            db.execute(
-                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
-                ("First inserted", "2024-01-01 00:00:00"),
-            )
-            db.execute(
-                "INSERT INTO todos (text, created_at) VALUES (?, ?)",
-                ("Second inserted", "2024-01-01 00:00:00"),
-            )
-            db.commit()
+            db.session.add(Todo(text="First inserted", created_at=same_ts))
+            db.session.add(Todo(text="Second inserted", created_at=same_ts))
+            db.session.commit()
 
         todos = client.get("/api/todos").get_json()
         assert todos[0]["text"] == "Second inserted"
