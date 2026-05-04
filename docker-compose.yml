@@ -8,7 +8,17 @@
 services:
   app:
     environment:
-      DATABASE_PATH: /data/todos.db
+      # Connessione MySQL: tutte le DB_* sono lette dall'ambiente del runner
+      # (CI/CD esporta i valori sourced da .env.mysql + secret GitHub).
+      # I default sono pensati per dev locale (mysql:8 senza TLS).
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-todos}
+      DB_USER: ${DB_USER:-todoapp}
+      DB_PASSWORD: ${DB_PASSWORD:-todopw}
+      # In dev DB_SSL_CA="" => no TLS. In prod e' /etc/mysql-ca/mysql-ca.pem
+      # (override impostato da Dockerfile/compose.prod a seconda dell'ambiente).
+      DB_SSL_CA: ${DB_SSL_CA:-}
     restart: unless-stopped
     healthcheck:
       test:
