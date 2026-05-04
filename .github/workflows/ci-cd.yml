@@ -335,6 +335,15 @@ jobs:
               [ -s "$f" ] || { echo "Missing or empty: $f"; ls -la; exit 1; }
             done
 
+            # Docker bind mounts auto-create their source as a *directory* if
+            # it doesn't exist when `docker compose up` runs. A previous deploy
+            # without the DB_SSL_CA secret would have left mysql-ca.pem as an
+            # empty dir; clean it up so the next `>` redirect can write a file.
+            if [ -d /root/docker-todo/mysql-ca.pem ]; then
+              echo "Removing stray directory at /root/docker-todo/mysql-ca.pem (Docker bind-mount auto-create)"
+              rm -rf /root/docker-todo/mysql-ca.pem
+            fi
+
             # Decode the base64-encoded CA cert from secret to the host path
             # docker-compose.prod.yml bind-mounts read-only into the container.
             # Falls back to whatever cloud-init wrote if the secret isn't set
