@@ -30,7 +30,10 @@ services:
       - --timeout=30
       - --access-logfile=-
       - --error-logfile=-
-      - app:app
+      # `app.app:app` = package `app` -> modulo `app.py` -> oggetto Flask `app`.
+      # Sovrascrive la CMD del Dockerfile (qui esplicita per i 4 workers di
+      # produzione); deve restare allineata col layout `/srv/app/` del runtime.
+      - app.app:app
     deploy:
       resources:
         limits:
