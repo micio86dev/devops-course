@@ -19,7 +19,11 @@ resource "digitalocean_droplet" "monitoring" {
     app_node_2_ip              = digitalocean_droplet.app[1].ipv4_address_private
     lb_ip                      = digitalocean_loadbalancer.public.ip
     grafana_password           = var.grafana_password
-    mysql_exporter_dsn         = var.mysql_exporter_dsn
+    # Individual MySQL vars for .my.cnf (mysqld_exporter v0.15+ dropped DATA_SOURCE_NAME)
+    mysql_exporter_user        = digitalocean_database_user.app.name
+    mysql_exporter_password    = digitalocean_database_user.app.password
+    mysql_exporter_host        = digitalocean_database_cluster.mysql.private_host
+    mysql_exporter_port        = digitalocean_database_cluster.mysql.port
     valkey_exporter_uri        = var.valkey_exporter_uri
     alertmanager_slack_url     = var.alertmanager_slack_url
     alertmanager_slack_channel = var.alertmanager_slack_channel

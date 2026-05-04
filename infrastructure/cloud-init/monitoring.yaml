@@ -1,5 +1,5 @@
 #cloud-config
-# Nodo monitoring: Prometheus · Grafana · Loki · Alertmanager
+# Nodo monitoring: Prometheus * Grafana * Loki * Alertmanager
 # Tutti i config file vengono scritti da cloud-init al primo boot.
 # I valori delle variabili ($${...}) vengono iniettati da Terraform templatefile().
 package_update: true
@@ -9,7 +9,7 @@ packages:
   - nginx
 
 bootcmd:
-  # Crea le directory prima di write_files (che le richiede già esistenti)
+  # Crea le directory prima di write_files (che le richiede gia esistenti)
   - mkdir -p /opt/monitoring/prometheus/rules
   - mkdir -p /opt/monitoring/loki
   - mkdir -p /opt/monitoring/alertmanager
@@ -17,18 +17,29 @@ bootcmd:
   - mkdir -p /opt/monitoring/grafana/provisioning/dashboards
 
 write_files:
-  # ── .env (segreti, mode 600) ──────────────────────────────────────────────
+  # -- .env (segreti, mode 600) ----------------------------------------------
   - path: /opt/monitoring/.env
     permissions: "0600"
     owner: root:root
     content: |
       GRAFANA_PASSWORD=${grafana_password}
-      MYSQL_EXPORTER_DSN=${mysql_exporter_dsn}
       VALKEY_EXPORTER_URI=${valkey_exporter_uri}
       ALERTMANAGER_SLACK_URL=${alertmanager_slack_url}
       ALERTMANAGER_SLACK_CHANNEL=${alertmanager_slack_channel}
 
-  # ── docker-compose.yml ───────────────────────────────────────────────────
+  # -- mysqld_exporter .my.cnf (mode 644 so nobody user inside container can read)
+  - path: /opt/monitoring/mysqld_exporter/.my.cnf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [client]
+      user=${mysql_exporter_user}
+      password=${mysql_exporter_password}
+      host=${mysql_exporter_host}
+      port=${mysql_exporter_port}
+      ssl-mode=REQUIRED
+
+  # -- docker-compose.yml ---------------------------------------------------
   - path: /opt/monitoring/docker-compose.yml
     content: |
       services:
@@ -68,8 +79,9 @@ write_files:
 
         mysqld_exporter:
           image: prom/mysqld-exporter:latest
-          environment:
-            - DATA_SOURCE_NAME=$MYSQL_EXPORTER_DSN
+          volumes:
+            - ./mysqld_exporter/.my.cnf:/home/.my.cnf:ro
+          command: ["--config.my-cnf=/home/.my.cnf"]
           restart: unless-stopped
 
         redis_exporter:
@@ -95,7 +107,7 @@ write_files:
         loki_data:
         grafana_data:
 
-  # ── prometheus/prometheus.yml ─────────────────────────────────────────────
+  # -- prometheus/prometheus.yml ---------------------------------------------
   - path: /opt/monitoring/prometheus/prometheus.yml
     content: |
       global:
@@ -164,7 +176,7 @@ write_files:
             - target_label: __address__
               replacement: blackbox:9115
 
-  # ── prometheus/rules/infrastructure.yml ───────────────────────────────────
+  # -- prometheus/rules/infrastructure.yml -----------------------------------
   - path: /opt/monitoring/prometheus/rules/infrastructure.yml
     content: |
       groups:
@@ -284,7 +296,7 @@ write_files:
               annotations:
                 summary: "MySQL connections above 80% of max"
 
-  # ── prometheus/rules/application.yml ──────────────────────────────────────
+  # -- prometheus/rules/application.yml --------------------------------------
   - path: /opt/monitoring/prometheus/rules/application.yml
     content: |
       groups:
@@ -299,7 +311,7 @@ write_files:
             #   annotations:
             #     summary: 'High 5xx rate on {{ $labels.node }}'
 
-  # ── loki/loki-config.yml ──────────────────────────────────────────────────
+  # -- loki/loki-config.yml --------------------------------------------------
   - path: /opt/monitoring/loki/loki-config.yml
     content: |
       auth_enabled: false
@@ -339,7 +351,7 @@ write_files:
         delete_request_store: filesystem
         compaction_interval: 10m
 
-  # ── alertmanager/alertmanager.yml ─────────────────────────────────────────
+  # -- alertmanager/alertmanager.yml -----------------------------------------
   - path: /opt/monitoring/alertmanager/alertmanager.yml
     content: |
       global:
@@ -378,7 +390,7 @@ write_files:
             severity: warning
           equal: ['node']
 
-  # ── grafana/provisioning/datasources/datasources.yml ──────────────────────
+  # -- grafana/provisioning/datasources/datasources.yml ----------------------
   - path: /opt/monitoring/grafana/provisioning/datasources/datasources.yml
     content: |
       apiVersion: 1
@@ -394,7 +406,7 @@ write_files:
           url: http://loki:3100
           editable: false
 
-  # ── grafana/provisioning/dashboards/dashboards.yml ────────────────────────
+  # -- grafana/provisioning/dashboards/dashboards.yml ------------------------
   - path: /opt/monitoring/grafana/provisioning/dashboards/dashboards.yml
     content: |
       apiVersion: 1
@@ -406,7 +418,7 @@ write_files:
           options:
             path: /etc/grafana/provisioning/dashboards
 
-  # ── nginx: proxy HTTP → Grafana ───────────────────────────────────────────
+  # -- nginx: proxy HTTP -> Grafana -------------------------------------------
   - path: /etc/nginx/sites-available/grafana
     content: |
       server {
