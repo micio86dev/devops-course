@@ -9,7 +9,7 @@ packages:
   - nginx
 
 bootcmd:
-  # Crea le directory prima di write_files (che le richiede già esistenti)
+  # Crea le directory prima di write_files (che le richiede gia esistenti)
   - mkdir -p /opt/monitoring/prometheus/rules
   - mkdir -p /opt/monitoring/loki
   - mkdir -p /opt/monitoring/alertmanager
@@ -406,7 +406,7 @@ write_files:
           options:
             path: /etc/grafana/provisioning/dashboards
 
-  # -- nginx: proxy HTTP → Grafana -------------------------------------------
+  # -- nginx: proxy HTTP -> Grafana -------------------------------------------
   - path: /etc/nginx/sites-available/grafana
     content: |
       server {
