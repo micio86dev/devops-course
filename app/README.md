@@ -28,11 +28,18 @@ docker-todo/
 
 ## Running locally (without Docker)
 
+A reachable MySQL 8 server is required (the app no longer ships SQLite).
+The simplest path is the local `mysql:8` service in the dev compose:
+
 ```bash
+docker compose up mysql -d        # bring up only the local MySQL
+
 cd app
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-DATABASE_PATH=/tmp/todos.db flask run
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=todos \
+DB_USER=todoapp DB_PASSWORD=todopw DB_SSL_CA="" \
+flask run
 # → http://localhost:5000
 ```
 
@@ -40,24 +47,28 @@ DATABASE_PATH=/tmp/todos.db flask run
 
 ## Running with Docker
 
-### Manual build
-
-```bash
-# Build
-docker build -t docker-todo .
-
-# Run
-docker run -p 5001:5000 -v todo-data:/data docker-todo
-
-# → http://localhost:5000
-```
-
 ### With docker compose (dev, hot reload)
 
 ```bash
 docker compose up --build
-# → http://localhost:5000
+# → http://localhost:5001  (the dev override maps host 5001 → container 5000)
 # Edit app/app.py → Flask reloads automatically
+# A local mysql:8 service is brought up alongside the app
+```
+
+### Manual build
+
+```bash
+docker build -t docker-todo .
+
+# The container expects DB_* env vars at runtime — point them at any
+# reachable MySQL 8 server (e.g. the compose mysql service on the host
+# network, or a Managed MySQL cluster).
+docker run --rm -p 5001:5000 \
+  -e DB_HOST=host.docker.internal -e DB_PORT=3306 \
+  -e DB_NAME=todos -e DB_USER=todoapp -e DB_PASSWORD=todopw \
+  -e DB_SSL_CA="" \
+  docker-todo
 ```
 
 ---
@@ -68,9 +79,9 @@ docker compose up --build
 
 The `Dockerfile` has **two stages**:
 
-| Stage | Purpose |
-|-------|---------|
-| `builder` | installs pip + dependencies into a venv |
+| Stage     | Purpose                                          |
+| --------- | ------------------------------------------------ |
+| `builder` | installs pip + dependencies into a venv          |
 | `runtime` | copies only the compiled venv + application code |
 
 Result: the final image **does not contain pip**, build tools, or cache.
@@ -122,13 +133,17 @@ docker inspect --format='{{.State.Health.Status}}' docker-todo-dev
 # Possible values: starting | healthy | unhealthy
 ```
 
-### 5. Volume for persistence
+### 5. Persistence in MySQL
 
 ```bash
-# Data survives container restarts
+# Data survives container restarts thanks to the `mysql-data` named volume
 docker compose down
 docker compose up -d
 # → todos are still there
+
+# Inspect the rows directly
+docker compose exec mysql \
+  mysql -utodoapp -ptodopw todos -e 'SELECT * FROM todos;'
 ```
 
 ---
@@ -158,11 +173,12 @@ push on PR
 Settings → Secrets and variables → Actions → New repository secret
 ```
 
-| Secret | Value |
-|--------|-------|
-| `DEPLOY_HOST` | server IP or hostname |
-| `DEPLOY_USER` | e.g. `ubuntu` |
-| `DEPLOY_SSH_KEY` | private SSH key (PEM) |
+| Secret           | Value                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| `DEPLOY_HOSTS`   | Comma-separated app node IPs (`terraform output app_node_ips`)       |
+| `DEPLOY_USER`    | SSH user (`root` for DO Ubuntu droplets)                             |
+| `DEPLOY_SSH_KEY` | Private SSH key (PEM)                                                |
+| `DB_HOST` etc.   | Managed MySQL connection details. See `docs/MYSQL_MIGRATION.md` § 6. |
 
 ### Adding the SSH key to the server
 
@@ -206,8 +222,8 @@ docker stats
 
 # List volumes
 docker volume ls
-docker volume inspect docker-todo_todo-data
+docker volume inspect docker-todo_mysql-data
 
-# Clean up everything (warning: also deletes volumes!)
+# Clean up everything (warning: also deletes volumes — including MySQL data!)
 docker compose down -v
 ```

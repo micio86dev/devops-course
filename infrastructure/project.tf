@@ -34,6 +34,10 @@ resource "digitalocean_project_resources" "course" {
       # al suo posto: l'URN del cluster Valkey managed
       digitalocean_database_cluster.cache.urn,
 
+      # Cluster MySQL managed (sostituira' la Droplet DB self-managed
+      # in un PR di follow-up dopo cutover)
+      digitalocean_database_cluster.mysql.urn,
+
       digitalocean_loadbalancer.public.urn,
     ]
   )

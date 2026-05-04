@@ -49,6 +49,50 @@ output "cache_uri" {
   sensitive = true
 }
 
+# ============================================================================
+# Output del Managed MySQL
+# Sei output coerenti con i secret richiesti da GitHub Actions:
+# DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, DB_SSL_CA.
+# ============================================================================
+
+output "mysql_private_host" {
+  description = "Hostname privato del Managed MySQL (visibile solo dalla VPC)"
+  value       = digitalocean_database_cluster.mysql.private_host
+}
+
+output "mysql_port" {
+  description = "Porta del cluster MySQL (di default 25060 sui Managed DO)"
+  value       = digitalocean_database_cluster.mysql.port
+}
+
+output "mysql_user" {
+  description = "Username applicativo creato nel cluster"
+  value       = digitalocean_database_user.app.name
+}
+
+output "mysql_password" {
+  description = "Password generata per l'utente applicativo"
+  value       = digitalocean_database_user.app.password
+  # sensitive: la password e' segreta. Per leggerla esplicitamente:
+  #   terraform output -raw mysql_password
+  sensitive = true
+}
+
+output "mysql_database" {
+  description = "Nome del database applicativo"
+  value       = digitalocean_database_db.app.name
+}
+
+output "mysql_ca_certificate" {
+  description = "Certificato CA del cluster in PEM. Da base64-encodare (terraform output -raw mysql_ca_certificate | base64) per il secret DB_SSL_CA."
+  # Il CA cert vive su un data source dedicato (non sul cluster stesso).
+  # L'attributo .certificate ora è già PEM, niente decode.
+  value = data.digitalocean_database_ca.mysql.certificate
+  # sensitive: tecnicamente e' pubblico (e' un CA cert), ma marcandolo
+  # sensitive evitiamo che finisca nei log di terraform plan/apply.
+  sensitive = true
+}
+
 output "project_name" {
   description = "Conferma del Project DO dove sono andate le resource"
   value       = data.digitalocean_project.course.name

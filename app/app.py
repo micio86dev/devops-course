@@ -1,45 +1,24 @@
 import os
-import sqlite3
-from typing import Any, cast
+from typing import Any
 
-from flask import Flask, Response, g, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
+from sqlalchemy import delete, select
+
+from app.db import build_connect_args, build_database_uri, db
+from app.models import Todo
 
 app = Flask(__name__)
 
-DATABASE = os.environ.get("DATABASE_PATH", "/data/todos.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "connect_args": build_connect_args(),
+    # Without pre-ping, idle connections silently dropped by the managed
+    # database / load balancer surface as one failed request after a quiet
+    # period. The extra round trip per checkout is cheap insurance.
+    "pool_pre_ping": True,
+}
 
-
-# ── DB helpers ───────────────────────────────────────────────────────────────
-
-
-def get_db() -> sqlite3.Connection:
-    if "db" not in g:
-        os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
-        g.db = sqlite3.connect(DATABASE, detect_types=sqlite3.PARSE_DECLTYPES)
-        g.db.row_factory = sqlite3.Row
-    return cast(sqlite3.Connection, g.db)
-
-
-@app.teardown_appcontext
-def close_db(error: BaseException | None) -> None:
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
-def init_db() -> None:
-    db = get_db()
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS todos (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            text      TEXT    NOT NULL,
-            done      BOOLEAN NOT NULL DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    db.commit()
+db.init_app(app)
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -58,8 +37,12 @@ def health() -> tuple[Response, int]:
 
 @app.route("/api/todos", methods=["GET"])
 def list_todos() -> Response:
-    rows = get_db().execute("SELECT * FROM todos ORDER BY created_at DESC, id DESC").fetchall()
-    return jsonify([dict(r) for r in rows])
+    rows = (
+        db.session.execute(select(Todo).order_by(Todo.created_at.desc(), Todo.id.desc()))
+        .scalars()
+        .all()
+    )
+    return jsonify([t.to_dict() for t in rows])
 
 
 @app.route("/api/todos", methods=["POST"])
@@ -69,36 +52,39 @@ def create_todo() -> tuple[Response, int]:
     text = (body.get("text") or "").strip()
     if not text:
         return jsonify({"error": "text is required"}), 400
-    db = get_db()
-    cur = db.execute("INSERT INTO todos (text) VALUES (?)", (text,))
-    db.commit()
-    row = db.execute("SELECT * FROM todos WHERE id = ?", (cur.lastrowid,)).fetchone()
-    return jsonify(dict(row)), 201
+    todo = Todo(text=text)
+    db.session.add(todo)
+    db.session.commit()
+    # Pull the server-populated created_at back into the instance so to_dict()
+    # has a real datetime to format.
+    db.session.refresh(todo)
+    return jsonify(todo.to_dict()), 201
 
 
 @app.route("/api/todos/<int:todo_id>/toggle", methods=["PATCH"])
 def toggle_todo(todo_id: int) -> tuple[Response, int]:
-    db = get_db()
-    db.execute("UPDATE todos SET done = NOT done WHERE id = ?", (todo_id,))
-    db.commit()
-    row = db.execute("SELECT * FROM todos WHERE id = ?", (todo_id,)).fetchone()
-    if row is None:
+    todo = db.session.get(Todo, todo_id)
+    if todo is None:
         return jsonify({"error": "not found"}), 404
-    return jsonify(dict(row)), 200
+    todo.done = 1 - todo.done
+    db.session.commit()
+    db.session.refresh(todo)
+    return jsonify(todo.to_dict()), 200
 
 
 @app.route("/api/todos/<int:todo_id>", methods=["DELETE"])
 def delete_todo(todo_id: int) -> tuple[str, int]:
-    db = get_db()
-    db.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
-    db.commit()
+    db.session.execute(delete(Todo).where(Todo.id == todo_id))
+    db.session.commit()
     return "", 204
 
 
 # ── DB initialisation ────────────────────────────────────────────────────────
 # Module-level: runs under both gunicorn (import) and flask run.
+# create_all() is idempotent — it issues CREATE TABLE IF NOT EXISTS, so
+# repeated imports / restarts never reset data.
 with app.app_context():
-    init_db()
+    db.create_all()
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
