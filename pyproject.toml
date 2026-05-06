@@ -16,3 +16,7 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 files = ["app", "scripts", "tests"]
+
+[[tool.mypy.overrides]]
+module = "prometheus_flask_exporter.*"
+ignore_missing_imports = true
