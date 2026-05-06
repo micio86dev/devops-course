@@ -2,12 +2,15 @@ import os
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
+from prometheus_flask_exporter import PrometheusMetrics
 from sqlalchemy import delete, select
 
 from app.db import build_connect_args, build_database_uri, db
 from app.models import Todo
 
 app = Flask(__name__)
+
+metrics = PrometheusMetrics(app)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {

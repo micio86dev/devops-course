@@ -6,3 +6,4 @@ pymysql==1.1.1
 # Pre-built wheels exist for linux/amd64+arm64, no system pkgs needed.
 cryptography==44.0.0
 gunicorn==23.0.0
+prometheus-flask-exporter

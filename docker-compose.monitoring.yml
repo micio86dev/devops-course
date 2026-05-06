@@ -1,5 +1,5 @@
 # Local-dev monitoring overlay — nessun VPC, nessuna assunzione di IP reali.
-# Uso: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Uso: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.monitoring.yml up -d
 #
 # Grafana: http://localhost:3000  (admin / admin — cambia al primo accesso)
 # Prometheus: http://localhost:9090
@@ -20,8 +20,10 @@ services:
 
   node_exporter:
     image: prom/node-exporter:latest
-    network_mode: host
-    pid: host
+    # network_mode: host
+    # pid: host
+    ports:
+      - "9100:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
