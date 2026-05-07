@@ -61,6 +61,10 @@ resource "null_resource" "node_agent" {
       "command -v docker >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker)",
       "systemctl is-active --quiet docker || systemctl start docker",
       "cd /root/monitoring && docker compose -f docker-compose.agents.yml up -d",
+      # Scrivi l'endpoint OTLP nel file env dell'app (sourciato dal CI/CD deploy)
+      "mkdir -p /root/docker-todo",
+      "echo 'OTLP_ENDPOINT=http://${digitalocean_droplet.monitoring.ipv4_address_private}:4317' > /root/docker-todo/.env.monitoring",
+      "chmod 600 /root/docker-todo/.env.monitoring",
     ]
   }
 

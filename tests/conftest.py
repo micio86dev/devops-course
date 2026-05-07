@@ -15,6 +15,9 @@ os.environ.setdefault("DB_NAME", "todos")
 os.environ.setdefault("DB_USER", "todoapp")
 os.environ.setdefault("DB_PASSWORD", "todopw")
 os.environ.setdefault("DB_SSL_CA", "")
+# Disable OTLP tracing in tests: `tempo` hostname is only available inside
+# the Docker monitoring network and would cause gRPC connection errors.
+os.environ.setdefault("OTLP_ENDPOINT", "")
 
 from sqlalchemy import delete  # noqa: E402
 
