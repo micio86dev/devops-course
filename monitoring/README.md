@@ -38,7 +38,7 @@ devops-course-monitoring (public IP)
 
 ```bash
 # Avvia stack app + monitoring (tutto in locale, no VPC)
-docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.monitoring.yml up -d
 
 # Grafana: http://localhost:3000  (admin / admin)
 # Prometheus: http://localhost:9090

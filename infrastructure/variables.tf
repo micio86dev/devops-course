@@ -160,12 +160,6 @@ variable "grafana_password" {
   sensitive   = true
 }
 
-variable "valkey_exporter_uri" {
-  description = "URI Valkey per redis_exporter: rediss://default:pass@host:25061"
-  type        = string
-  sensitive   = true
-}
-
 variable "alertmanager_slack_url" {
   description = "Webhook Slack per Alertmanager (lascia vuoto per disabilitare)"
   type        = string

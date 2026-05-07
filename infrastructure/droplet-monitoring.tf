@@ -24,7 +24,7 @@ resource "digitalocean_droplet" "monitoring" {
     mysql_exporter_password    = digitalocean_database_user.app.password
     mysql_exporter_host        = digitalocean_database_cluster.mysql.private_host
     mysql_exporter_port        = digitalocean_database_cluster.mysql.port
-    valkey_exporter_uri        = var.valkey_exporter_uri
+    valkey_exporter_uri        = digitalocean_database_cluster.cache.private_uri
     alertmanager_slack_url     = var.alertmanager_slack_url
     alertmanager_slack_channel = var.alertmanager_slack_channel
   })

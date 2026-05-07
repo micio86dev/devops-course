@@ -51,6 +51,13 @@ resource "digitalocean_firewall" "app" {
     source_addresses = ["${digitalocean_droplet.monitoring.ipv4_address_private}/32"]
   }
 
+  # Flask /metrics: scraping da Prometheus sul nodo monitoring
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = tostring(var.host_port)
+    source_addresses = ["${digitalocean_droplet.monitoring.ipv4_address_private}/32"]
+  }
+
   # === REGOLE OUTBOUND (dove possono connettersi DA queste Droplet) ===
 
   # TCP outbound aperto: serve per docker pull, apt, MySQL, Valkey, ecc.

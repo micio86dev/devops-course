@@ -56,10 +56,10 @@ The `rm -rf /var/lib/apt/lists/*` is mandatory — it keeps the image small.
 
 ## docker-compose — dev vs prod
 
-| File | Use | Key differences |
-|------|-----|-----------------|
-| `docker-compose.yml` | local dev | bind mount `/app`, FLASK_DEBUG=1, `flask run` |
-| `docker-compose.prod.yml` | production | image from GHCR, gunicorn, resource limits |
+| File                      | Use        | Key differences                               |
+| ------------------------- | ---------- | --------------------------------------------- |
+| `docker-compose.yml`      | local dev  | bind mount `/app`, FLASK_DEBUG=1, `flask run` |
+| `docker-compose.prod.yml` | production | image from GHCR, gunicorn, resource limits    |
 
 ### External port mapping
 
@@ -69,6 +69,7 @@ The container always listens on port 5000 internally.
 ### Adding a service (e.g. Redis)
 
 Add to `docker-compose.yml`:
+
 ```yaml
 services:
   redis:
@@ -128,13 +129,15 @@ This speeds up every run by avoiding re-downloading packages from scratch.
 ### Image tags
 
 The workflow automatically generates:
+
 - `:latest` — on every push to main
 - `:sha-XXXXXXX` — short commit hash
 - `:v1.2.3` — if a Git tag `v1.2.3` exists
 
 To force a deploy of a specific version:
+
 ```bash
-IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -f docker-compose.monitoring.yml up -d
 ```
 
 ---
@@ -142,6 +145,7 @@ IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.yml -f docker-compose.pro
 ## Healthcheck
 
 The `/healthz` endpoint is the verification point for:
+
 - `HEALTHCHECK` in the Dockerfile (Docker daemon)
 - `healthcheck:` in docker-compose
 - The "Verify deployment" step in the CI workflow

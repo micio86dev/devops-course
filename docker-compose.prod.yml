@@ -1,5 +1,5 @@
 # docker-compose.prod.yml  ─  override produzione
-# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Uso: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.monitoring.yml up -d
 #
 # In CI/CD questo file viene usato dopo il push dell'immagine su GHCR.
 # L'immagine viene presa dal registry (non buildata localmente).
@@ -19,6 +19,7 @@ services:
     environment:
       FLASK_DEBUG: "0"
       REDIS_URL: ${REDIS_URL:-} # Valkey URI; app non lo usa (demo infrastrutturale)
+      OTLP_ENDPOINT: ${OTLP_ENDPOINT:-} # vuoto = tracing disabilitato; scritto in .env.monitoring da Terraform
     volumes:
       # CA del Managed MySQL: read-only, montato dal path scritto da cloud-init.
       # Il container legge questo file via DB_SSL_CA (default del Dockerfile).

@@ -1,0 +1,26 @@
+groups:
+  - name: node
+    rules:
+      - alert: HighCPU
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 20
+        for: 5s
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage above 20%"
+
+      - alert: HighMemory
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 50
+        for: 5s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory usage above 50%"
+
+      - alert: AppDown
+        expr: up{job="app"} == 0
+        for: 5s
+        labels:
+          severity: critical
+        annotations:
+          summary: "App is down"
