@@ -1,8 +1,11 @@
 # ============================================================================
 # null-resource-node-agents.tf
-# Installa node_exporter, cAdvisor e Promtail su ciascun nodo app via SSH.
-# Usa null_resource + remote-exec perché i nodi esistono già (cloud-init è
-# già avvenuto). Rieseguito se cambia l'IP del nodo monitoring o dell'app node.
+# Provisiona ciascun nodo app via SSH dopo la creazione delle Droplet:
+#   • Installa node_exporter, cAdvisor, Promtail (monitoring agents)
+#   • Scrive /root/docker-todo/.env.mysql  (credenziali DB per CI/CD deploy)
+#   • Scrive /root/docker-todo/.env.monitoring (OTLP endpoint per tracing)
+# Usa null_resource + remote-exec / file provisioner perché cloud-init è già
+# avvenuto al primo boot. Rieseguito se cambia monitoring IP, node IP o host MySQL.
 # ============================================================================
 
 locals {
@@ -21,10 +24,11 @@ locals {
 resource "null_resource" "node_agent" {
   for_each = local.app_nodes
 
-  # Re-run se cambia l'IP del nodo monitoring (config Promtail) o del nodo stesso
+  # Re-run se cambia l'IP del nodo monitoring, del nodo stesso, o l'host MySQL
   triggers = {
     monitoring_private_ip = digitalocean_droplet.monitoring.ipv4_address_private
     node_private_ip       = each.value.private_ip
+    mysql_host            = digitalocean_database_cluster.mysql.private_host
   }
 
   connection {
@@ -55,14 +59,28 @@ resource "null_resource" "node_agent" {
     destination = "/root/monitoring/docker-compose.agents.yml"
   }
 
+  # Scrivi .env.mysql via file provisioner (SFTP): la password non passa per la shell,
+  # quindi non serve escaping. Idempotente: sovrascrive se l'host MySQL cambia.
+  provisioner "file" {
+    content = templatefile("${path.module}/templates/env-mysql.tpl", {
+      mysql_host     = digitalocean_database_cluster.mysql.private_host
+      mysql_port     = digitalocean_database_cluster.mysql.port
+      mysql_database = digitalocean_database_db.app.name
+      mysql_user     = digitalocean_database_user.app.name
+      mysql_password = digitalocean_database_user.app.password
+    })
+    destination = "/root/docker-todo/.env.mysql"
+  }
+
   provisioner "remote-exec" {
     inline = [
       # Installa Docker se cloud-init non l'ha fatto (idempotente)
       "command -v docker >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker)",
       "systemctl is-active --quiet docker || systemctl start docker",
       "cd /root/monitoring && docker compose -f docker-compose.agents.yml up -d",
-      # Scrivi l'endpoint OTLP nel file env dell'app (sourciato dal CI/CD deploy)
+      # Scrivi i file env dell'app (sourciati dal CI/CD deploy)
       "mkdir -p /root/docker-todo",
+      "chmod 600 /root/docker-todo/.env.mysql",
       "echo 'OTLP_ENDPOINT=http://${digitalocean_droplet.monitoring.ipv4_address_private}:4317' > /root/docker-todo/.env.monitoring",
       "chmod 600 /root/docker-todo/.env.monitoring",
     ]
@@ -72,5 +90,8 @@ resource "null_resource" "node_agent" {
     digitalocean_droplet.monitoring,
     digitalocean_firewall.monitoring,
     digitalocean_firewall.app,
+    digitalocean_database_cluster.mysql,
+    digitalocean_database_db.app,
+    digitalocean_database_user.app,
   ]
 }
