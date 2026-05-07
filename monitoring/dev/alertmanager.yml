@@ -1,0 +1,6 @@
+route:
+  receiver: "default"
+
+receivers:
+  - name: "default"
+    # per ora nessuna notifica reale, solo per far girare alertmanager

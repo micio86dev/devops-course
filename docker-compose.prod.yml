@@ -1,5 +1,5 @@
 # docker-compose.prod.yml  ─  override produzione
-# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Uso: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.monitoring.yml up -d
 #
 # In CI/CD questo file viene usato dopo il push dell'immagine su GHCR.
 # L'immagine viene presa dal registry (non buildata localmente).

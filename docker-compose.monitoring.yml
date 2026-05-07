@@ -11,6 +11,7 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/dev/alerts.yml:/etc/prometheus/alerts.yml:ro # aggiungi questa riga per montare il file degli alert
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -77,6 +78,14 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
 
 volumes:
