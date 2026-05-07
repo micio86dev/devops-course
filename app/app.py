@@ -2,15 +2,37 @@ import os
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from prometheus_flask_exporter import PrometheusMetrics
 from sqlalchemy import delete, select
 
 from app.db import build_connect_args, build_database_uri, db
 from app.models import Todo
 
-app = Flask(__name__)
+# ── OpenTelemetry setup ──────────────────────────────────────────────────────
+provider = TracerProvider(
+    sampler=ALWAYS_ON, resource=Resource.create({"service.name": "flask-todo"})
+)
+exporter = OTLPSpanExporter(endpoint="http://tempo:4317", insecure=True)
+provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
 
+# inietta trace_id/span_id automaticamente in tutti i log
+LoggingInstrumentor().instrument(set_logging_format=True)
+
+# ── App ──────────────────────────────────────────────────────────────────────
+app = Flask(__name__)
 metrics = PrometheusMetrics(app)
+FlaskInstrumentor().instrument_app(app)
+SQLAlchemyInstrumentor().instrument()
 
 app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {

@@ -88,6 +88,17 @@ services:
       - ./monitoring/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     restart: unless-stopped
 
+  tempo:
+    image: grafana/tempo:latest
+    ports:
+      - "3200:3200" # API Tempo
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    volumes:
+      - ./monitoring/dev/tempo.yml:/etc/tempo.yaml:ro
+    command: -config.file=/etc/tempo.yaml
+    restart: unless-stopped
+
 volumes:
   prometheus_data:
   loki_data:
