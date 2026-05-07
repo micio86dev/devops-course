@@ -16,7 +16,8 @@ services:
     ports:
       - "5001:5000"
     environment:
-      FLASK_DEBUG: "1"
+      DEBUG_METRICS: 1 # Abilita endpoint /metrics per Prometheus (usato solo in dev, non in prod)
+      FLASK_DEBUG: 0
       # Override del default DB_SSL_CA del Dockerfile: locale = no TLS
       # (il file /etc/mysql-ca/mysql-ca.pem non esiste in dev).
       DB_SSL_CA: ""

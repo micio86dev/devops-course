@@ -12,6 +12,7 @@ bootcmd:
   # Crea le directory prima di write_files (che le richiede gia esistenti)
   - mkdir -p /opt/monitoring/prometheus/rules
   - mkdir -p /opt/monitoring/loki
+  - mkdir -p /opt/monitoring/tempo
   - mkdir -p /opt/monitoring/alertmanager
   - mkdir -p /opt/monitoring/grafana/provisioning/datasources
   - mkdir -p /opt/monitoring/grafana/provisioning/dashboards
@@ -91,6 +92,16 @@ write_files:
             - REDIS_ADDR=$VALKEY_EXPORTER_URI
           restart: unless-stopped
 
+        tempo:
+          image: grafana/tempo:latest
+          volumes:
+            - ./tempo/tempo.yml:/etc/tempo.yaml:ro
+            - tempo_data:/var/tempo
+          command: -config.file=/etc/tempo.yaml
+          ports:
+            - "4317:4317"
+          restart: unless-stopped
+
         grafana:
           image: grafana/grafana:latest
           volumes:
@@ -106,7 +117,31 @@ write_files:
       volumes:
         prometheus_data:
         loki_data:
+        tempo_data:
         grafana_data:
+
+  # -- tempo/tempo.yml -------------------------------------------------------
+  - path: /opt/monitoring/tempo/tempo.yml
+    content: |
+      server:
+        http_listen_port: 3200
+
+      distributor:
+        receivers:
+          otlp:
+            protocols:
+              grpc:
+                endpoint: 0.0.0.0:4317
+              http:
+                endpoint: 0.0.0.0:4318
+
+      storage:
+        trace:
+          backend: local
+          local:
+            path: /var/tempo
+          wal:
+            path: /var/tempo/wal
 
   # -- prometheus/prometheus.yml ---------------------------------------------
   - path: /opt/monitoring/prometheus/prometheus.yml
@@ -161,6 +196,18 @@ write_files:
         - job_name: valkey
           static_configs:
             - targets: ['redis_exporter:9121']
+
+        - job_name: flask-app-1
+          static_configs:
+            - targets: ['${app_node_1_ip}:5001']
+              labels:
+                node: app-1
+
+        - job_name: flask-app-2
+          static_configs:
+            - targets: ['${app_node_2_ip}:5001']
+              labels:
+                node: app-2
 
         - job_name: blackbox-lb
           metrics_path: /probe
@@ -303,14 +350,13 @@ write_files:
       groups:
         - name: application
           rules:
-            # Uncomment once the Flask app exposes /metrics via prometheus_flask_exporter
-            # - alert: HighHTTP5xxRate
-            #   expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
-            #   for: 5m
-            #   labels:
-            #     severity: warning
-            #   annotations:
-            #     summary: 'High 5xx rate on {{ $labels.node }}'
+            - alert: HighHTTP5xxRate
+              expr: rate(flask_http_request_total{status=~"5.."}[5m]) / rate(flask_http_request_total[5m]) > 0.05
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: 'High 5xx rate on {{ $labels.node }}: {{ $value | printf "%.1f" }}%'
 
   # -- loki/loki-config.yml --------------------------------------------------
   - path: /opt/monitoring/loki/loki-config.yml
@@ -406,6 +452,16 @@ write_files:
           type: loki
           url: http://loki:3100
           editable: false
+
+        - name: Tempo
+          type: tempo
+          url: http://tempo:3200
+          editable: false
+          jsonData:
+            tracesToLogsV2:
+              datasourceUid: loki
+            serviceMap:
+              datasourceUid: prometheus
 
   # -- grafana/provisioning/dashboards/dashboards.yml ------------------------
   - path: /opt/monitoring/grafana/provisioning/dashboards/dashboards.yml

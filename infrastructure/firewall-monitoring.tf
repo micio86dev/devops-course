@@ -32,6 +32,13 @@ resource "digitalocean_firewall" "monitoring" {
     source_addresses = [digitalocean_vpc.main.ip_range]
   }
 
+  # OTLP gRPC da app nodes → Tempo (solo VPC privata)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "4317"
+    source_addresses = [digitalocean_vpc.main.ip_range]
+  }
+
   outbound_rule {
     protocol              = "tcp"
     port_range            = "1-65535"

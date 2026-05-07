@@ -24,9 +24,6 @@ docker_image = "utente/todo-app:latest"
 # Password admin di Grafana — scegliere una password sicura
 grafana_password = "una-password-sicura"
 
-# URI Valkey per redis_exporter. Valore da: terraform output cache_uri
-valkey_exporter_uri  = "$(terraform output cache_uri)"
-
 # Webhook Slack (lasciare vuoto per disabilitare le notifiche)
 # alertmanager_slack_url     = ""
 # alertmanager_slack_channel = "#alerts"

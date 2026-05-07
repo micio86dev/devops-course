@@ -1,5 +1,5 @@
 # Local-dev monitoring overlay — nessun VPC, nessuna assunzione di IP reali.
-# Uso: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Uso: docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.monitoring.yml up -d
 #
 # Grafana: http://localhost:3000  (admin / admin — cambia al primo accesso)
 # Prometheus: http://localhost:9090
@@ -11,6 +11,7 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/dev/alerts.yml:/etc/prometheus/alerts.yml:ro # aggiungi questa riga per montare il file degli alert
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -20,8 +21,10 @@ services:
 
   node_exporter:
     image: prom/node-exporter:latest
-    network_mode: host
-    pid: host
+    # network_mode: host
+    # pid: host
+    ports:
+      - "9100:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -75,6 +78,25 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/dev/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:latest
+    ports:
+      - "3200:3200" # API Tempo
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    volumes:
+      - ./monitoring/dev/tempo.yml:/etc/tempo.yaml:ro
+    command: -config.file=/etc/tempo.yaml
     restart: unless-stopped
 
 volumes:

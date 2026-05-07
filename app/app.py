@@ -2,12 +2,42 @@ import os
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
+from prometheus_flask_exporter import PrometheusMetrics
 from sqlalchemy import delete, select
 
 from app.db import build_connect_args, build_database_uri, db
 from app.models import Todo
 
+# ── OpenTelemetry setup ──────────────────────────────────────────────────────
+# OTLP_ENDPOINT: empty string disables tracing (no-op provider).
+# Dev default: http://tempo:4317 (docker-compose network name).
+# Production: set to http://<monitoring_node_private_ip>:4317 via .env.monitoring.
+_otlp_endpoint = os.environ.get("OTLP_ENDPOINT", "http://tempo:4317")
+provider = TracerProvider(
+    sampler=ALWAYS_ON, resource=Resource.create({"service.name": "flask-todo"})
+)
+if _otlp_endpoint:  # pragma: no cover
+    exporter = OTLPSpanExporter(endpoint=_otlp_endpoint, insecure=True)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+trace.set_tracer_provider(provider)
+
+# inietta trace_id/span_id automaticamente in tutti i log
+LoggingInstrumentor().instrument(set_logging_format=True)
+
+# ── App ──────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
+FlaskInstrumentor().instrument_app(app)  # type: ignore[no-untyped-call]
+SQLAlchemyInstrumentor().instrument()
 
 app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {

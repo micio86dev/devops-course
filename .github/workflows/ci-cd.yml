@@ -311,9 +311,10 @@ jobs:
               chmod 644 /root/docker-todo/mysql-ca.pem
             fi
 
-            # Source env files written by cloud-init.
-            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
-            [ -f .env.mysql  ] && export $(cat .env.mysql  | xargs)
+            # Source env files written by cloud-init and Terraform null_resource.
+            [ -f .env.valkey     ] && export $(cat .env.valkey     | xargs)
+            [ -f .env.mysql      ] && export $(cat .env.mysql      | xargs)
+            [ -f .env.monitoring ] && export $(cat .env.monitoring | xargs)
 
             # Workflow secrets win over .env.mysql when both are set —
             # supports rotation without rerunning Terraform/cloud-init.
@@ -492,9 +493,10 @@ jobs:
               chmod 644 /root/docker-todo/mysql-ca.pem
             fi
 
-            # Source env files written by cloud-init (Valkey URI, MySQL conn).
-            [ -f .env.valkey ] && export $(cat .env.valkey | xargs)
-            [ -f .env.mysql  ] && export $(cat .env.mysql  | xargs)
+            # Source env files written by cloud-init and Terraform null_resource.
+            [ -f .env.valkey     ] && export $(cat .env.valkey     | xargs)
+            [ -f .env.mysql      ] && export $(cat .env.mysql      | xargs)
+            [ -f .env.monitoring ] && export $(cat .env.monitoring | xargs)
 
             # Workflow secrets win over .env.mysql for rotation without
             # re-running Terraform/cloud-init.
